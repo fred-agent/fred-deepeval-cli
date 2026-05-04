@@ -1,21 +1,28 @@
-# fred-deepeval-cli
+PROJECT_NAME=fred-deepeval-cli
+PY_PACKAGE=fred_deepeval_cli
 
-External CLI for evaluating one Fred agent turn through `POST /agents/evaluate`.
+include ../../scripts/makefiles/python-vars.mk
 
-## Purpose
+include ../../scripts/makefiles/python-deps.mk
+include ../../scripts/makefiles/python-code-quality.mk
+include ../../scripts/makefiles/python-test.mk
+include ../../scripts/makefiles/python-clean.mk
+include ../../scripts/makefiles/help.mk
 
-This project provides a small external CLI that:
-- calls a Fred pod `/agents/evaluate` endpoint
-- receives an `EvalTrace`
-- classifies the turn outcome
-- prints a stable JSON payload for evaluation workflows
+.PHONY: cli
+cli: dev ## Run the external EvalTrace CLI
+	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.main --help
 
-## Example
-
-```bash
-uv run python -m fred_deepeval_cli.main evaluate \
-  --base-url http://127.0.0.1:8000/fred/agents/v2 \
-  --agent-id fred.test.assistant \
-  --input "echo bonjour" \
-  --session-id eval-001 \
-  --user-id alice
+.PHONY: eval
+eval: dev ## Evaluate one Fred agent turn
+	@if [ -z "$(BASE_URL)" ] || [ -z "$(AGENT_ID)" ] || [ -z "$(INPUT)" ] || [ -z "$(SESSION_ID)" ] || [ -z "$(USER_ID)" ]; then \
+		echo "Usage: make eval BASE_URL=http://127.0.0.1:8000/fred/agents/v2 AGENT_ID=fred.test.assistant INPUT='echo bonjour' SESSION_ID=eval-001 USER_ID=alice [TEAM_ID=my-team]"; \
+		exit 1; \
+	fi
+	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.main evaluate \
+		--base-url "$(BASE_URL)" \
+		--agent-id "$(AGENT_ID)" \
+		--input "$(INPUT)" \
+		--session-id "$(SESSION_ID)" \
+		--user-id "$(USER_ID)" \
+		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",)

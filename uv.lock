@@ -535,7 +535,7 @@ wheels = [
 [[package]]
 name = "fred-core"
 version = "2.0.0"
-source = { editable = "../fred/libs/fred-core" }
+source = { editable = "../../libs/fred-core" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "asyncpg" },
@@ -649,8 +649,8 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.8.6" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = "==1.31.0" },
     { name = "detect-secrets", marker = "extra == 'dev'", specifier = ">=1.5.0" },
-    { name = "fred-runtime", editable = "../fred/libs/fred-runtime" },
-    { name = "fred-sdk", editable = "../fred/libs/fred-sdk" },
+    { name = "fred-runtime", editable = "../../libs/fred-runtime" },
+    { name = "fred-sdk", editable = "../../libs/fred-sdk" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
     { name = "pytest-socket", marker = "extra == 'dev'", specifier = ">=0.7.0" },
@@ -672,7 +672,7 @@ dev = [
 [[package]]
 name = "fred-runtime"
 version = "2.0.0"
-source = { editable = "../fred/libs/fred-runtime" }
+source = { editable = "../../libs/fred-runtime" }
 dependencies = [
     { name = "deepagents" },
     { name = "fred-core" },
@@ -694,8 +694,8 @@ requires-dist = [
     { name = "deepagents", specifier = ">=0.4.11" },
     { name = "detect-secrets", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "fastapi", marker = "extra == 'app'", specifier = ">=0.116" },
-    { name = "fred-core", editable = "../fred/libs/fred-core" },
-    { name = "fred-sdk", editable = "../fred/libs/fred-sdk" },
+    { name = "fred-core", editable = "../../libs/fred-core" },
+    { name = "fred-sdk", editable = "../../libs/fred-sdk" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },
@@ -723,7 +723,7 @@ dev = [
 [[package]]
 name = "fred-sdk"
 version = "2.0.0"
-source = { editable = "../fred/libs/fred-sdk" }
+source = { editable = "../../libs/fred-sdk" }
 dependencies = [
     { name = "fred-core" },
     { name = "httpx" },
@@ -738,7 +738,7 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.8.6" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = "==1.31.0" },
     { name = "detect-secrets", marker = "extra == 'dev'", specifier = ">=1.5.0" },
-    { name = "fred-core", editable = "../fred/libs/fred-core" },
+    { name = "fred-core", editable = "../../libs/fred-core" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },

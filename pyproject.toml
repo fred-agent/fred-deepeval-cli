@@ -38,8 +38,8 @@ addopts = "-ra"
 testpaths = ["tests"]
 
 [tool.uv.sources]
-fred-sdk = { path = "../fred/libs/fred-sdk", editable = true }
-fred-runtime = { path = "../fred/libs/fred-runtime", editable = true }
+fred-sdk = { path = "../../libs/fred-sdk", editable = true }
+fred-runtime = { path = "../../libs/fred-runtime", editable = true }
 
 [dependency-groups]
 dev = [
