@@ -8,14 +8,15 @@ This project provides a small external CLI that:
 - calls a Fred pod `/agents/evaluate` endpoint
 - receives an `EvalTrace`
 - classifies the turn outcome
-- prints a stable JSON payload for evaluation workflows
+- optionally scores the trace with DeepEval
 
-## Example
+## Commands
 
 ```bash
-uv run python -m fred_deepeval_cli.main evaluate \
-  --base-url http://127.0.0.1:8000/fred/agents/v2 \
-  --agent-id fred.test.assistant \
-  --input "echo bonjour" \
-  --session-id eval-001 \
-  --user-id alice
+make dev
+make eval-dev
+make test
+make code-quality
+make cli
+make eval BASE_URL=http://127.0.0.1:8000/fred/agents/v2 AGENT_ID=fred.test.assistant INPUT="echo bonjour" SESSION_ID=eval-001 USER_ID=alice
+make score BASE_URL=http://127.0.0.1:8000/fred/agents/v2 AGENT_ID=fred.test.assistant INPUT="echo bonjour" SESSION_ID=eval-001 USER_ID=alice

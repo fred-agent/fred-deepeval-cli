@@ -4,7 +4,7 @@ import argparse
 import json
 from unittest.mock import MagicMock, patch
 
-from fred_deepeval_cli.main import build_parser, run_evaluate
+from fred_deepeval_cli.main import build_parser, run_evaluate, run_score
 
 
 def test_build_parser_parses_evaluate_command() -> None:
@@ -259,3 +259,115 @@ def test_run_evaluate_hitl_blocked(mock_client_cls: MagicMock, capsys) -> None:
     assert payload["outcome"] == "hitl_blocked"
     assert payload["trace"]["tools_called"] == ["bank.risk_guard.score_transfer"]
 
+@patch("fred_deepeval_cli.main.score_trace")
+@patch("fred_runtime.cli.pod_client.AgentPodClient")
+def test_run_score_without_retrieval_context_uses_general_metric(
+    mock_client_cls: MagicMock,
+    mock_score_trace: MagicMock,
+    capsys,
+) -> None:
+    mock_client = mock_client_cls.return_value
+    mock_client.evaluate.return_value = {
+        "session_id": "eval-005",
+        "agent_id": "fred.test.assistant",
+        "input": "echo bonjour",
+        "output": "Echo: echo bonjour",
+        "error": None,
+        "latency_ms": 123,
+        "model_name": None,
+        "token_usage": None,
+        "finish_reason": None,
+        "steps": [],
+        "retrieval_context": [],
+        "tools_called": [],
+    }
+    mock_score_trace.return_value = {
+        "metrics": [
+            {
+                "name": "AnswerRelevancyMetric",
+                "score": 1.0,
+                "success": True,
+                "reason": None,
+            }
+        ]
+    }
+
+    args = argparse.Namespace(
+        base_url="http://127.0.0.1:8000/fred/agents/v2",
+        agent_id="fred.test.assistant",
+        input="echo bonjour",
+        session_id="eval-005",
+        user_id="alice",
+        team_id=None,
+    )
+
+    exit_code = run_score(args)
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert "deepeval" in payload
+    assert payload["deepeval"]["metrics"][0]["name"] == "AnswerRelevancyMetric"
+
+
+@patch("fred_deepeval_cli.main.score_trace")
+@patch("fred_runtime.cli.pod_client.AgentPodClient")
+def test_run_score_with_retrieval_context_includes_faithfulness(
+    mock_client_cls: MagicMock,
+    mock_score_trace: MagicMock,
+    capsys,
+) -> None:
+    mock_client = mock_client_cls.return_value
+    mock_client.evaluate.return_value = {
+        "session_id": "eval-006",
+        "agent_id": "fred.github.rag_expert",
+        "input": "What capabilities does fred.github.rag_expert have?",
+        "output": "fred.github.rag_expert can search indexed GitHub knowledge and answer from retrieved context.",
+        "error": None,
+        "latency_ms": 456,
+        "model_name": None,
+        "token_usage": None,
+        "finish_reason": "stop",
+        "steps": [],
+        "retrieval_context": [
+            "fred.github.rag_expert can search indexed GitHub knowledge using retrieval."
+        ],
+        "tools_called": ["knowledge_search"],
+    }
+    mock_score_trace.return_value = {
+        "metrics": [
+            {
+                "name": "AnswerRelevancyMetric",
+                "score": 0.95,
+                "success": True,
+                "reason": None,
+            },
+            {
+                "name": "FaithfulnessMetric",
+                "score": 0.91,
+                "success": True,
+                "reason": None,
+            },
+        ]
+    }
+
+    args = argparse.Namespace(
+        base_url="http://127.0.0.1:8000/fred/agents/v2",
+        agent_id="fred.github.rag_expert",
+        input="What capabilities does fred.github.rag_expert have?",
+        session_id="eval-006",
+        user_id="alice",
+        team_id=None,
+    )
+
+    exit_code = run_score(args)
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert "deepeval" in payload
+    metric_names = [metric["name"] for metric in payload["deepeval"]["metrics"]]
+    assert "AnswerRelevancyMetric" in metric_names
+    assert "FaithfulnessMetric" in metric_names

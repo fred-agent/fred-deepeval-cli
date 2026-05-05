@@ -23,10 +23,12 @@ basedpyright-report.json
 build/
 dist/
 *.egg-info/
+target/
 
 # Local environment files
 .env
 .env.local
+config/.env
 
 # macOS / editor
 .DS_Store
