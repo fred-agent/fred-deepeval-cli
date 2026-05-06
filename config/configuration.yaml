@@ -1,0 +1,4 @@
+judge:
+  provider: litellm
+  model: mistral/mistral-large-latest
+  api_base: https://api.mistral.ai/v1

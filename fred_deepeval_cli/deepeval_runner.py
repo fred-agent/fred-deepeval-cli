@@ -5,29 +5,31 @@ import os
 from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric
 from fred_deepeval_cli.deepeval_adapter import trace_to_test_case
 from deepeval.models.llms import GPTModel, LiteLLMModel
+from fred_deepeval_cli.config_loader import load_configuration
 
 
 def build_judge_model():
-    provider = os.environ.get("DEEPEVAL_JUDGE_PROVIDER", "litellm")
-    model_name = os.environ.get("DEEPEVAL_JUDGE_MODEL")
+    config = load_configuration()
+    provider = config.judge.provider
+    model_name = config.judge.model
 
     if provider == "litellm":
-        if not model_name:
-            model_name = "mistral/mistral-large-latest"
+        api_key = os.environ.get("LITELLM_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "Missing LITELLM_API_KEY in environment/.env for the litellm judge."
+            )
+
         return LiteLLMModel(
             model=model_name,
-            api_key=os.environ["LITELLM_API_KEY"],
-            base_url=os.environ.get("LITELLM_API_BASE"),
+            api_key=api_key,
+            base_url=config.judge.api_base,
         )
 
     if provider == "openai":
-        if not model_name:
-            model_name = "gpt-4.1-mini"
-        return GPTModel(
-            model=model_name,
-        )
+        return GPTModel(model=model_name)
 
-    raise ValueError(f"Unsupported DEEPEVAL_JUDGE_PROVIDER: {provider}")
+    raise ValueError(f"Unsupported judge provider: {provider}")
 
 def score_trace(trace: dict) -> dict:
     test_case = trace_to_test_case(trace)
