@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 
-from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric
 from fred_deepeval_cli.deepeval_adapter import trace_to_test_case
 from deepeval.models.llms import GPTModel, LiteLLMModel
 from fred_deepeval_cli.config_loader import load_configuration
+from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric
 
 
 def build_judge_model():
@@ -41,6 +41,7 @@ def score_trace(trace: dict) -> dict:
 
     if trace.get("retrieval_context"):
         metrics.append(FaithfulnessMetric(model=judge_model))
+
 
     results = []
 

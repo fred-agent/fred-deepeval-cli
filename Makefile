@@ -29,7 +29,10 @@ eval: dev ## Evaluate one Fred agent turn
 		--input "$(INPUT)" \
 		--session-id "$(SESSION_ID)" \
 		--user-id "$(USER_ID)" \
-		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",)
+		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",) \
+		$(if $(ACCESS_TOKEN),--access-token "$(ACCESS_TOKEN)",) \
+		$(if $(SEARCH_POLICY),--search-policy "$(SEARCH_POLICY)",)
+
 
 .PHONY: score
 score: eval-dev ## Evaluate and score one Fred agent turn with DeepEval
@@ -43,4 +46,6 @@ score: eval-dev ## Evaluate and score one Fred agent turn with DeepEval
 		--input "$(INPUT)" \
 		--session-id "$(SESSION_ID)" \
 		--user-id "$(USER_ID)" \
-		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",)
+		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",) \
+		$(if $(ACCESS_TOKEN),--access-token "$(ACCESS_TOKEN)",) \
+		$(if $(SEARCH_POLICY),--search-policy "$(SEARCH_POLICY)",)
