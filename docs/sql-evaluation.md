@@ -17,6 +17,21 @@ For that reason, the current SQL evaluation flow combines two complementary laye
 2. factual checks on the actual `read_query` result.
 
 ---
+## Current Availability of the SQL Agent
+
+At the moment, `fred.github.sql_expert` is exposed only in the `1606-expose-sql-agent-in-fred-agents` branch of `fred-agents`, in PS mode.
+
+To test the SQL evaluation flow from `fred-deepeval-cli`, `fred-agents` must therefore be started locally from that branch.
+
+In practice:
+- switch `fred-agents` to branch `1606-expose-sql-agent-in-fred-agents`;
+- start the local agent runtime from that branch;
+- then run the evaluation commands from `fred-deepeval-cli`, for example:
+
+```bash
+make sql-scenarios \
+  BASE_URL=http://127.0.0.1:8000/fred/agents/v2
+
 
 ## Goal
 
