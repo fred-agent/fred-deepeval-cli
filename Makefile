@@ -49,3 +49,16 @@ score: eval-dev ## Evaluate and score one Fred agent turn with DeepEval
 		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",) \
 		$(if $(ACCESS_TOKEN),--access-token "$(ACCESS_TOKEN)",) \
 		$(if $(SEARCH_POLICY),--search-policy "$(SEARCH_POLICY)",)
+
+.PHONY: sql-scenarios
+sql-scenarios: eval-dev ## Run the SQL scenario campaign against fred.github.sql_expert
+	@if [ -z "$(BASE_URL)" ]; then \
+		echo "Usage: make sql-scenarios BASE_URL=http://127.0.0.1:8000/fred/agents/v2 [USER_ID=alice] [TEAM_ID=my-team]"; \
+		exit 1; \
+	fi
+	VIRTUAL_ENV= $(UV) run python scripts/run_sql_scenarios.py \
+		--base-url "$(BASE_URL)" \
+		--agent-id "fred.github.sql_expert" \
+		--user-id "$(or $(USER_ID),alice)" \
+		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",) \
+		$(if $(ACCESS_TOKEN),--access-token "$(ACCESS_TOKEN)",)
