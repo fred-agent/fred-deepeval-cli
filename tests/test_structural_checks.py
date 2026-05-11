@@ -112,7 +112,6 @@ def test_rag_no_hallucinated_source_ok_returns_false_when_cited_source_is_missin
 
     assert rag_no_hallucinated_source_ok(trace) is False
 
-
 def test_build_structural_checks_returns_rag_profile_for_rag_expert() -> None:
     trace = {
         "agent_id": "fred.github.rag_expert",
