@@ -4,6 +4,11 @@ import argparse
 
 import httpx
 
+from fred_deepeval_cli.trace_sources import (
+    NativeEvalTraceSource,
+    PrismAdaptedTraceSource,
+)
+
 
 def build_runtime_context(args: argparse.Namespace) -> dict:
     runtime_context = {"user_id": args.user_id}
@@ -36,14 +41,21 @@ def build_headers(args: argparse.Namespace) -> dict[str, str]:
 
 
 def fetch_trace(args: argparse.Namespace) -> dict:
-    with httpx.Client(timeout=httpx.Timeout(30.0, connect=5.0, read=None)) as http_client:
-        response = http_client.post(
-            f"{args.base_url.rstrip('/')}/agents/evaluate",
-            json=build_eval_payload(args),
-            headers=build_headers(args),
-        )
-        response.raise_for_status()
-        result = response.json()
-        if not isinstance(result, dict):
-            raise RuntimeError("Evaluate response must be a JSON object.")
-        return result
+    native = NativeEvalTraceSource()
+    adapted = PrismAdaptedTraceSource()
+
+    if args.trace_mode == "native":
+        return native.fetch_trace(args)
+
+    if args.trace_mode == "adapted":
+        return adapted.fetch_trace(args)
+
+    try:
+        return native.fetch_trace(args)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code not in {404, 405}:
+            raise
+    except RuntimeError:
+        pass
+
+    return adapted.fetch_trace(args)

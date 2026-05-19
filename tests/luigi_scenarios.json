@@ -1,0 +1,58 @@
+[
+  {
+    "id": "luigi_happy_path_with_retry",
+    "agent_id": "Luigi v2",
+    "input": "Proposer une offre commerciale",
+    "tags": ["ppt", "retry", "cv", "finance"],
+    "expected_flow": {
+      "required_tools": true,
+      "sequence_ok": true,
+      "fill_template_attempted": true,
+      "ppt_generated": true,
+      "retry_after_validation": true
+    },
+    "expected_values": {
+      "enjeuxBesoins.refCahierCharges": "CIR_TSN_2024_MARTO.docx",
+      "prestationFinanciere.prixTotal": 0
+    },
+    "expected_constraints": {
+      "final_output_consistent": false
+    }
+  },
+  {
+    "id": "luigi_generate_offer_variant",
+    "agent_id": "Luigi v2",
+    "input": "Génère une offre commerciale",
+    "tags": ["ppt", "retry", "variant"],
+    "expected_flow": {
+      "required_tools": true,
+      "sequence_ok": true,
+      "fill_template_attempted": true,
+      "ppt_generated": true
+    },
+    "expected_values": {
+      "prestationFinanciere.prixTotal": 0
+    },
+    "expected_constraints": {
+      "financial_block_zero_or_empty": true
+    }
+  },
+  {
+    "id": "luigi_offer_generation_short_prompt",
+    "agent_id": "Luigi v2",
+    "input": "Créer une offre commerciale",
+    "tags": ["ppt", "short-prompt"],
+    "expected_flow": {
+      "required_tools": true,
+      "sequence_ok": true,
+      "fill_template_attempted": true,
+      "ppt_generated": true
+    },
+    "expected_values": {
+      "prestationFinanciere.prixTotal": 0
+    },
+    "expected_constraints": {
+      "financial_block_zero_or_empty": true
+    }
+  }
+]

@@ -5,7 +5,6 @@ import json
 import os
 
 from fred_deepeval_cli.classify import classify_turn
-from fred_deepeval_cli.deepeval_runner import score_trace
 from fred_deepeval_cli.eval_client import (
     build_eval_payload,
     build_headers,
@@ -55,6 +54,12 @@ def add_shared_eval_args(parser: argparse.ArgumentParser) -> None:
         default=os.environ.get("FRED_SEARCH_POLICY"),
         help="Optional runtime search policy override (for example: semantic).",
     )
+    parser.add_argument(
+        "--trace-mode",
+        choices=["auto", "native", "adapted"],
+        default="auto",
+        help="How to obtain the EvalTrace.",
+    )
 
 
 def build_base_payload(outcome: str, trace: dict) -> dict:
@@ -81,6 +86,8 @@ def run_evaluate(args: argparse.Namespace) -> int:
 
 
 def run_score(args: argparse.Namespace) -> int:
+    from fred_deepeval_cli.deepeval_runner import score_trace
+
     trace = fetch_trace(args)
     outcome = classify_turn(trace)
 
@@ -99,7 +106,6 @@ def run_score(args: argparse.Namespace) -> int:
         return 1
 
     return 0
-
 
 def main() -> int:
     parser = build_parser()

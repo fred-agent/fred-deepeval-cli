@@ -130,6 +130,86 @@ def sql_no_execution_error_ok(trace: dict) -> bool:
 
     return True
 
+# Luigi/PPT-filler-specific structural checks.
+
+
+def luigi_required_tools_ok(trace: dict) -> bool:
+    tools_called = set(trace.get("tools_called", []))
+    required = {
+        "extract_enjeux_besoins",
+        "extract_cv",
+        "extract_prestation_financiere",
+        "fill_template",
+    }
+    return required.issubset(tools_called)
+
+
+def luigi_extraction_sequence_ok(trace: dict) -> bool:
+    tool_calls = [
+        step.get("tool_name")
+        for step in trace.get("steps", [])
+        if step.get("kind") == "tool_call"
+    ]
+
+    expected = [
+        "extract_enjeux_besoins",
+        "extract_cv",
+        "extract_prestation_financiere",
+        "fill_template",
+    ]
+
+    last_index = -1
+    for tool_name in expected:
+        try:
+            current_index = tool_calls.index(tool_name, last_index + 1)
+        except ValueError:
+            return False
+        last_index = current_index
+
+    return True
+
+
+def luigi_template_attempted_ok(trace: dict) -> bool:
+    return _has_tool_call(trace, "fill_template")
+
+
+def luigi_template_generated_ok(trace: dict) -> bool:
+    for step in trace.get("steps", []):
+        if step.get("kind") != "tool_result":
+            continue
+        content = step.get("content") or ""
+        if isinstance(content, str) and "PowerPoint généré" in content:
+            return True
+    return False
+
+
+def luigi_retry_after_validation_ok(trace: dict) -> bool:
+    fill_template_calls = [
+        step
+        for step in trace.get("steps", [])
+        if step.get("kind") == "tool_call" and step.get("tool_name") == "fill_template"
+    ]
+    if len(fill_template_calls) < 2:
+        return False
+
+    saw_validation_error = False
+    for step in trace.get("steps", []):
+        if step.get("kind") != "tool_result":
+            continue
+        content = step.get("content") or ""
+        if isinstance(content, str) and "Validation échouée" in content:
+            saw_validation_error = True
+            break
+
+    return saw_validation_error and luigi_template_generated_ok(trace)
+
+
+def luigi_final_output_consistent_ok(trace: dict) -> bool:
+    output = trace.get("output") or ""
+    if luigi_template_generated_ok(trace) and "Validation échouée" in output:
+        return False
+    return True
+
 
 # Profile selection and final structural-check payload assembly.
 
@@ -138,13 +218,17 @@ def build_structural_checks(trace: dict) -> dict:
     agent_id = trace.get("agent_id")
     is_rag = agent_id == "fred.github.rag_expert"
     is_sql = agent_id == "fred.github.sql_expert"
+    is_luigi = agent_id == "Luigi v2"
 
     if is_rag:
         profile = "rag_basic"
     elif is_sql:
         profile = "sql_basic"
+    elif is_luigi:
+        profile = "luigi_basic"
     else:
         profile = "default"
+
 
     structural_checks = {
         "profile": profile,
@@ -171,5 +255,23 @@ def build_structural_checks(trace: dict) -> dict:
         structural_checks["sql_no_execution_error_ok"] = sql_no_execution_error_ok(
             trace
         )
+    if is_luigi:
+        structural_checks["luigi_required_tools_ok"] = luigi_required_tools_ok(trace)
+        structural_checks["luigi_extraction_sequence_ok"] = (
+            luigi_extraction_sequence_ok(trace)
+        )
+        structural_checks["luigi_template_attempted_ok"] = (
+            luigi_template_attempted_ok(trace)
+        )
+        structural_checks["luigi_template_generated_ok"] = (
+            luigi_template_generated_ok(trace)
+        )
+        structural_checks["luigi_retry_after_validation_ok"] = (
+            luigi_retry_after_validation_ok(trace)
+        )
+        structural_checks["luigi_final_output_consistent_ok"] = (
+            luigi_final_output_consistent_ok(trace)
+        )
+
 
     return structural_checks

@@ -601,7 +601,7 @@ wheels = [
 
 [[package]]
 name = "fred-core"
-version = "2.0.1"
+version = "2.0.4"
 source = { editable = "../../libs/fred-core" }
 dependencies = [
     { name = "aiosqlite" },
@@ -685,8 +685,10 @@ name = "fred-deepeval-cli"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "deepeval" },
     { name = "fred-runtime" },
     { name = "fred-sdk" },
+    { name = "websocket-client" },
 ]
 
 [package.optional-dependencies]
@@ -708,6 +710,7 @@ eval = [
 requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.8.6" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = "==1.31.0" },
+    { name = "deepeval" },
     { name = "deepeval", marker = "extra == 'eval'" },
     { name = "detect-secrets", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "fred-runtime", editable = "../../libs/fred-runtime" },
@@ -717,12 +720,13 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
     { name = "pytest-socket", marker = "extra == 'dev'", specifier = ">=0.7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.5" },
+    { name = "websocket-client", specifier = ">=1.8.0" },
 ]
 provides-extras = ["dev", "eval"]
 
 [[package]]
 name = "fred-runtime"
-version = "2.0.4"
+version = "2.0.5"
 source = { editable = "../../libs/fred-runtime" }
 dependencies = [
     { name = "deepagents" },
@@ -773,7 +777,7 @@ dev = [
 
 [[package]]
 name = "fred-sdk"
-version = "2.0.3"
+version = "2.0.4"
 source = { editable = "../../libs/fred-sdk" }
 dependencies = [
     { name = "fred-core" },
@@ -3076,6 +3080,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/79/3e/c0bdc27cf06f4e47680bd5803a07cb3dfd17de84cde92dd217dcb9e05253/wcmatch-10.1.tar.gz", hash = "sha256:f11f94208c8c8484a16f4f48638a85d771d9513f4ab3f37595978801cb9465af", size = 117421, upload-time = "2025-06-22T19:14:02.49Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/d8/0d1d2e9d3fabcf5d6840362adcf05f8cf3cd06a73358140c3a97189238ae/wcmatch-10.1-py3-none-any.whl", hash = "sha256:5848ace7dbb0476e5e55ab63c6bbd529745089343427caa5537f230cc01beb8a", size = 39854, upload-time = "2025-06-22T19:14:00.978Z" },
+]
+
+[[package]]
+name = "websocket-client"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/41/aa4bf9664e4cda14c3b39865b12251e8e7d239f4cd0e3cc1b6c2ccde25c1/websocket_client-1.9.0.tar.gz", hash = "sha256:9e813624b6eb619999a97dc7958469217c3176312b3a16a4bd1bc7e08a46ec98", size = 70576, upload-time = "2025-10-07T21:16:36.495Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/db/b10e48aa8fff7407e67470363eac595018441cf32d5e1001567a7aeba5d2/websocket_client-1.9.0-py3-none-any.whl", hash = "sha256:af248a825037ef591efbf6ed20cc5faa03d3b47b9e5a2230a529eeee1c1fc3ef", size = 82616, upload-time = "2025-10-07T21:16:34.951Z" },
 ]
 
 [[package]]

@@ -9,6 +9,8 @@ authors = []
 dependencies = [
   "fred-sdk",
   "fred-runtime",
+  "websocket-client>=1.8.0",
+  "deepeval",
 ]
 
 [project.optional-dependencies]
