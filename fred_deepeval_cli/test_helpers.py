@@ -15,6 +15,7 @@ def make_trace(
     *,
     session_id: str = "eval-001",
     agent_id: str = "fred.test.assistant",
+    agent_tags: list[str] | None = None,
     input: str = "echo bonjour",
     output: str | None = "Echo: echo bonjour",
     error: str | None = None,
@@ -29,6 +30,7 @@ def make_trace(
     return {
         "session_id": session_id,
         "agent_id": agent_id,
+        "agent_tags": agent_tags or [],
         "input": input,
         "output": output,
         "error": error,

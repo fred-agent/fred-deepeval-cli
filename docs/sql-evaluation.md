@@ -35,7 +35,7 @@ make sql-scenarios \
 
 ## Goal
 
-The goal of the current implementation is to provide a first practical SQL-aware evaluation layer for local development, built around a dedicated profile named `sql_basic` for the agent `fred.github.sql_expert`.
+The goal of the current implementation is to provide a first practical SQL-aware evaluation layer for local development, built around a dedicated profile named `sql` for the agent `fred.github.sql_expert`.
 
 It is designed to answer two complementary questions:
 
@@ -46,15 +46,9 @@ It is designed to answer two complementary questions:
 
 ## Profile Recognition
 
-The first step is to make `fred.github.sql_expert` recognized as a specific SQL profile in `structural_checks.py`.
+The CLI resolves the `sql` preset from `agent_tags` in the trace. When `agent_tags` contains a tag that maps to the `sql` preset, the CLI applies SQL-specific structural checks automatically.
 
-The declared profile is:
-
-```python
-profile = "sql_basic"
-```
-
-This allows the system to apply SQL-specific checks instead of treating this agent as a generic case.
+An explicit `PRESET=sql` override remains available to force preset resolution regardless of `agent_tags`.
 
 ---
 
@@ -71,30 +65,7 @@ The SQL scenario flow currently relies on two files:
 
 ### Overview
 
-Four structural checks have been defined to validate observable SQL behavior.
-
-### `sql_tool_used_ok`
-
-Answers: **did the agent invoke the right SQL tools?**
-
-Verifies that a tabular tool was called, typically:
-
-- `list_tabular_datasets`
-- `read_query`
-
-Signal used: `tools_called`
-
-This is sufficient to detect whether a SQL tool was triggered.
-
-### `sql_schema_context_present_ok`
-
-Answers: **did the agent consult the schema or context before acting?**
-
-Verifies that a data context was consulted, generally via a successful `list_tabular_datasets` call followed by a non-error `tool_result`.
-
-Signal used: `steps`
-
-> This check is more reliable than testing `retrieval_context` directly, since `retrieval_context` may also contain other non-schema tool content.
+Two structural checks are currently defined to validate observable SQL behavior.
 
 ### `sql_query_executed_ok`
 
@@ -163,16 +134,12 @@ Example:
 
 ```json
 "expected_flow": {
-  "schema_context": true,
   "query_executed": true
 }
 ```
 
 Current fields:
 
-- **`schema_context`**
-  - `true`: a schema or dataset inspection is expected
-  - `false`: no schema inspection is expected
 - **`query_executed`**
   - `true`: a `read_query` execution is expected
   - `false`: no SQL query is expected
@@ -197,18 +164,15 @@ Supported tags: `metadata`, `join`, `aggregation`, `support`, `ambiguity`, etc.
 
 This validates the first evaluation layer:
 
-- schema inspection happened when expected,
 - SQL execution happened when expected,
 - no SQL execution error occurred.
 
 The runner compares:
 
-- `expected_flow.schema_context`
 - `expected_flow.query_executed`
 
-against the structural checks already produced by the CLI:
+against the structural check already produced by the CLI:
 
-- `sql_schema_context_present_ok`
 - `sql_query_executed_ok`
 
 This transforms manual prompts into a replayable scenario campaign.

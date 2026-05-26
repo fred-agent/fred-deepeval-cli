@@ -31,7 +31,7 @@ def build_judge_model():
 
     raise ValueError(f"Unsupported judge provider: {provider}")
 
-def score_trace(trace: dict) -> dict:
+def score_trace(trace: dict, preset: str = "default") -> dict:
     test_case = trace_to_test_case(trace)
     judge_model = build_judge_model()
 
@@ -39,9 +39,8 @@ def score_trace(trace: dict) -> dict:
         AnswerRelevancyMetric(model=judge_model),
     ]
 
-    if trace.get("retrieval_context"):
+    if preset == "rag" and trace.get("retrieval_context"):
         metrics.append(FaithfulnessMetric(model=judge_model))
-
 
     results = []
 
@@ -56,4 +55,7 @@ def score_trace(trace: dict) -> dict:
             }
         )
 
-    return {"metrics": results}
+    return {
+        "preset": preset,
+        "metrics": results,
+    }

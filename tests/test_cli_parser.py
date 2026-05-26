@@ -5,14 +5,14 @@ import pytest
 from fred_deepeval_cli.main import build_parser
 
 
-def test_build_parser_parses_evaluate_command(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_parser_parses_score_command(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FRED_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("FRED_SEARCH_POLICY", raising=False)
 
     parser = build_parser()
     args = parser.parse_args(
         [
-            "evaluate",
+            "score",
             "--base-url",
             "http://127.0.0.1:8000/fred/agents/v2",
             "--agent-id",
@@ -26,7 +26,8 @@ def test_build_parser_parses_evaluate_command(monkeypatch: pytest.MonkeyPatch) -
         ]
     )
 
-    assert args.command == "evaluate"
+    assert args.command == "score"
+    assert args.preset == "auto"
     assert args.base_url == "http://127.0.0.1:8000/fred/agents/v2"
     assert args.agent_id == "fred.test.assistant"
     assert args.input == "echo bonjour"

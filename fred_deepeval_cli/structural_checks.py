@@ -3,27 +3,15 @@ from __future__ import annotations
 import re
 
 
-# Shared helpers used by multiple structural-check profiles.
+# RAG-specific structural checks.
+def rag_tool_used_ok(trace: dict) -> bool:
+    return "knowledge_search" in trace.get("tools_called", [])
 
 
-def normalize_source_label(value: str) -> str:
-    value = value.lower().strip()
-    value = re.sub(r"\.(docx|pdf|md|txt|pptx|csv)$", "", value)
-    value = value.replace("_", " ").replace("-", " ")
-    value = re.sub(r"\s+", " ", value)
-    return value
+def rag_context_nonempty_ok(trace: dict) -> bool:
+    return bool(trace.get("retrieval_context"))
 
-
-def extract_explicit_source_labels(output: str) -> list[str]:
-    file_matches = re.findall(
-        r"\b[\w.-]+\.(?:docx|pdf|md|txt|pptx|csv)\b",
-        output,
-        flags=re.IGNORECASE,
-    )
-    normalized = [normalize_source_label(match) for match in file_matches]
-    return list(dict.fromkeys(normalized))
-
-
+# SQL-specific structural checks.
 def _tool_steps(trace: dict, kind: str, tool_name: str) -> list[dict]:
     return [
         step
@@ -47,63 +35,6 @@ def _has_successful_tool_result(trace: dict, tool_name: str) -> bool:
                 return True
 
     return False
-
-
-# RAG-specific structural checks.
-
-
-def rag_tool_used_ok(trace: dict) -> bool:
-    return "knowledge_search" in trace.get("tools_called", [])
-
-
-def rag_context_nonempty_ok(trace: dict) -> bool:
-    return bool(trace.get("retrieval_context"))
-
-
-def rag_citations_present_ok(trace: dict) -> bool:
-    output = trace.get("output") or ""
-    lowered = output.lower()
-
-    markers = [
-        "source",
-        "sources",
-        "document",
-        "documents",
-        "selon le document",
-        "dans les documents",
-    ]
-    return any(marker in lowered for marker in markers)
-
-
-def rag_context_count_ok(trace: dict) -> bool:
-    count = len(trace.get("retrieval_context", []))
-    return 1 <= count <= 8
-
-
-def rag_no_hallucinated_source_ok(trace: dict) -> bool:
-    output = trace.get("output") or ""
-    retrieval_context = trace.get("retrieval_context", [])
-
-    cited_sources = extract_explicit_source_labels(output)
-    if not cited_sources:
-        return True
-
-    retrieval_blob = normalize_source_label("\n".join(retrieval_context))
-    return all(source in retrieval_blob for source in cited_sources)
-
-
-# SQL-specific structural checks.
-
-
-def sql_tool_used_ok(trace: dict) -> bool:
-    tools_called = trace.get("tools_called", [])
-    return any(
-        tool in tools_called for tool in ("list_tabular_datasets", "read_query")
-    )
-
-
-def sql_schema_context_present_ok(trace: dict) -> bool:
-    return _has_successful_tool_result(trace, "list_tabular_datasets")
 
 
 def sql_query_executed_ok(trace: dict) -> bool:
@@ -130,46 +61,17 @@ def sql_no_execution_error_ok(trace: dict) -> bool:
 
     return True
 
-
-# Profile selection and final structural-check payload assembly.
-
-
-def build_structural_checks(trace: dict) -> dict:
-    agent_id = trace.get("agent_id")
-    is_rag = agent_id == "fred.github.rag_expert"
-    is_sql = agent_id == "fred.github.sql_expert"
-
-    if is_rag:
-        profile = "rag_basic"
-    elif is_sql:
-        profile = "sql_basic"
-    else:
-        profile = "default"
-
-    structural_checks = {
-        "profile": profile,
-        "required_tools_ok": True,
-        "retrieval_context_ok": True,
-        "expected_outcome_ok": True,
+# Final structural-check payload assembly.
+def build_structural_checks(trace: dict, preset: str = "default") -> dict:
+    checks: dict[str, object] = {
+        "preset": preset,
     }
 
-    if is_rag:
-        structural_checks["rag_tool_used_ok"] = rag_tool_used_ok(trace)
-        structural_checks["rag_context_nonempty_ok"] = rag_context_nonempty_ok(trace)
-        structural_checks["rag_citations_present_ok"] = rag_citations_present_ok(trace)
-        structural_checks["rag_context_count_ok"] = rag_context_count_ok(trace)
-        structural_checks["rag_no_hallucinated_source_ok"] = (
-            rag_no_hallucinated_source_ok(trace)
-        )
+    if preset == "rag":
+        checks["rag_tool_used_ok"] = rag_tool_used_ok(trace)
+        checks["rag_context_nonempty_ok"] = rag_context_nonempty_ok(trace)
+    elif preset == "sql":
+        checks["sql_query_executed_ok"] = sql_query_executed_ok(trace)
+        checks["sql_no_execution_error_ok"] = sql_no_execution_error_ok(trace)
 
-    if is_sql:
-        structural_checks["sql_tool_used_ok"] = sql_tool_used_ok(trace)
-        structural_checks["sql_schema_context_present_ok"] = (
-            sql_schema_context_present_ok(trace)
-        )
-        structural_checks["sql_query_executed_ok"] = sql_query_executed_ok(trace)
-        structural_checks["sql_no_execution_error_ok"] = sql_no_execution_error_ok(
-            trace
-        )
-
-    return structural_checks
+    return checks

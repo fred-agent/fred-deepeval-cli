@@ -601,7 +601,7 @@ wheels = [
 
 [[package]]
 name = "fred-core"
-version = "2.0.1"
+version = "2.0.4"
 source = { editable = "../../libs/fred-core" }
 dependencies = [
     { name = "aiosqlite" },
@@ -702,6 +702,7 @@ dev = [
 eval = [
     { name = "deepeval" },
     { name = "litellm" },
+    { name = "rich" },
 ]
 
 [package.metadata]
@@ -716,13 +717,14 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
     { name = "pytest-socket", marker = "extra == 'dev'", specifier = ">=0.7.0" },
+    { name = "rich", marker = "extra == 'eval'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.5" },
 ]
 provides-extras = ["dev", "eval"]
 
 [[package]]
 name = "fred-runtime"
-version = "2.0.4"
+version = "2.0.7"
 source = { editable = "../../libs/fred-runtime" }
 dependencies = [
     { name = "deepagents" },
@@ -773,7 +775,7 @@ dev = [
 
 [[package]]
 name = "fred-sdk"
-version = "2.0.3"
+version = "2.0.6"
 source = { editable = "../../libs/fred-sdk" }
 dependencies = [
     { name = "fred-core" },

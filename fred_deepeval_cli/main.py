@@ -6,13 +6,10 @@ import os
 
 from fred_deepeval_cli.classify import classify_turn
 from fred_deepeval_cli.deepeval_runner import score_trace
-from fred_deepeval_cli.eval_client import (
-    build_eval_payload,
-    build_headers,
-    build_runtime_context,
-    fetch_trace,
-)
+from fred_deepeval_cli.preset_resolver import resolve_preset
+from fred_deepeval_cli.eval_client import fetch_trace
 from fred_deepeval_cli.structural_checks import build_structural_checks
+from fred_deepeval_cli.display import render_score
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,12 +19,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    evaluate_parser = subparsers.add_parser(
-        "evaluate",
-        help="Evaluate one Fred agent turn via /agents/evaluate.",
-    )
-    add_shared_eval_args(evaluate_parser)
 
     score_parser = subparsers.add_parser(
         "score",
@@ -55,58 +46,53 @@ def add_shared_eval_args(parser: argparse.ArgumentParser) -> None:
         default=os.environ.get("FRED_SEARCH_POLICY"),
         help="Optional runtime search policy override (for example: semantic).",
     )
+    parser.add_argument(
+        "--preset",
+        default="auto",
+        choices=["auto", "rag", "sql", "default"],
+        help="Evaluation preset. Defaults to auto-detection from agent_tags.",
+    )
 
 
-def build_base_payload(outcome: str, trace: dict) -> dict:
+def build_base_payload(outcome: str, trace: dict, preset: str = "auto") -> dict:
+    resolved_preset = resolve_preset(trace, explicit_preset=preset)
+
     return {
         "outcome": outcome,
         "trace": trace,
-        "structural_checks": build_structural_checks(trace),
+        "preset": resolved_preset,
+        "structural_checks": build_structural_checks(
+            trace, preset=resolved_preset
+        ),
         "run_metadata": {},
     }
-
-
-def run_evaluate(args: argparse.Namespace) -> int:
-    trace = fetch_trace(args)
-    outcome = classify_turn(trace)
-
-    payload = build_base_payload(outcome, trace)
-
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
-
-    if outcome == "execution_error":
-        return 1
-
-    return 0
 
 
 def run_score(args: argparse.Namespace) -> int:
     trace = fetch_trace(args)
     outcome = classify_turn(trace)
 
-    payload = build_base_payload(outcome, trace)
+    payload = build_base_payload(outcome, trace, preset=args.preset)
+    resolved_preset = payload["preset"]
 
-    payload["deepeval"] = score_trace(trace)
+    payload["deepeval"] = score_trace(trace, preset=resolved_preset)
     payload["scoring_errors"] = []
     payload["run_metadata"] = {
         "scoring_provider": "litellm",
         "scoring_model": "mistral/mistral-large-latest",
     }
 
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    render_score(payload)                                      # stderr — affichage humain
+    print(json.dumps(payload, indent=2, ensure_ascii=False))   # stdout — machine/UI
 
     if outcome == "execution_error":
         return 1
 
     return 0
 
-
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-
-    if args.command == "evaluate":
-        return run_evaluate(args)
 
     if args.command == "score":
         return run_score(args)

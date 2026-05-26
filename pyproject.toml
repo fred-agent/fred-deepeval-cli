@@ -24,6 +24,7 @@ dev = [
 eval = [
   "deepeval",
   "litellm",
+  "rich>=13.0",
 ]
 
 [project.scripts]

@@ -39,7 +39,8 @@ def test_score_trace_without_retrieval_context_only_uses_answer_relevancy(
         make_trace(
             retrieval_context=[],
             output="Echo: echo bonjour",
-        )
+        ),
+        preset="default",
     )
 
     metric_names = [metric["name"] for metric in result["metrics"]]
@@ -61,10 +62,35 @@ def test_score_trace_with_retrieval_context_adds_faithfulness(
             output="Réponse fondée sur le contexte.",
             retrieval_context=["chunk-1"],
             tools_called=["knowledge_search"],
-        )
+        ),
+        preset="rag",
     )
 
     metric_names = [metric["name"] for metric in result["metrics"]]
 
     assert "FakeAnswerMetric" in metric_names
     assert "FakeFaithfulnessMetric" in metric_names
+    assert result["preset"] == "rag"
+
+@patch("fred_deepeval_cli.deepeval_runner.build_judge_model")
+@patch("fred_deepeval_cli.deepeval_runner.FaithfulnessMetric", new=FakeFaithfulnessMetric)
+@patch("fred_deepeval_cli.deepeval_runner.AnswerRelevancyMetric", new=FakeAnswerMetric)
+def test_score_trace_with_sql_preset_only_uses_answer_relevancy(
+    mock_build_judge_model,
+) -> None:
+    mock_build_judge_model.return_value = object()
+
+    result = score_trace(
+        make_trace(
+            agent_id="fred.github.sql_expert",
+            agent_tags=["sql", "tabular", "react"],
+            output="Average order amount: 548.7",
+            retrieval_context=["schema fragment"],
+        ),
+        preset="sql",
+    )
+
+    metric_names = [metric["name"] for metric in result["metrics"]]
+
+    assert result["preset"] == "sql"
+    assert metric_names == ["FakeAnswerMetric"]

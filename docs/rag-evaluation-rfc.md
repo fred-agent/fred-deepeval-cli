@@ -6,8 +6,7 @@
 
 For RAG-oriented agents such as `fred.github.rag_expert`, evaluating only the final answer is not sufficient. A response can look correct while:
 - no retrieval tool was actually called,
-- no retrieval context was surfaced in the trace,
-- citations were missing or unreliable.
+- no retrieval context was surfaced in the trace.
 
 For that reason, the current design combines:
 1. semantic scoring with DeepEval,
@@ -71,47 +70,6 @@ Checks whether `knowledge_search` was called.
 
 Checks whether the trace contains a non-empty `retrieval_context`.
 
-### `rag_context_count_ok`
-
-Checks whether the amount of retrieved context stays within a reasonable range.
-
-Current rule:
-- `1 <= len(retrieval_context) <= 8`
-
-### `rag_citations_present_ok`
-
-Checks whether the final answer contains source-like or citation-like markers.
-
-This remains a deliberately simple output-shape check.
-
-### `rag_no_hallucinated_source_ok`
-
-Heuristic check aimed at verifying that explicit source labels cited in the final answer can also be found in the retrieved context.
-
-This check is intended to help detect:
-- invented sources;
-- documents cited in the answer but never actually retrieved;
-- inconsistent file labels compared to the surfaced context.
-
-Current implementation:
-- extracts explicit source-like labels from the answer;
-- normalizes those labels;
-- verifies that they appear in `retrieval_context`.
-
-This is a heuristic v1, not a formal citation validation mechanism.
-
-
-### `rag_no_hallucinated_source_ok`
-
-Heuristic check ensuring that explicit source labels cited in the answer can also be found in the retrieved context.
-
-Current implementation:
-- extracts explicit file-like labels from the answer,
-- normalizes them,
-- verifies they appear in `retrieval_context`.
-
-This is a heuristic v1, not a fully reliable citation-validation system.
-
 ---
 
 ## Example Execution Profiles Observed
@@ -129,7 +87,6 @@ Interpretation:
 Typical structural result:
 - `rag_tool_used_ok = false`
 - `rag_context_nonempty_ok = false`
-- `rag_context_count_ok = false`
 
 Typical DeepEval result:
 - `AnswerRelevancyMetric` only
@@ -145,7 +102,8 @@ Interpretation:
 - semantic faithfulness can also be evaluated.
 
 Typical structural result:
-- all `rag_*` checks true
+- `rag_tool_used_ok = true`
+- `rag_context_nonempty_ok = true`
 
 Typical DeepEval result:
 - `AnswerRelevancyMetric`
@@ -183,19 +141,10 @@ This metric may be reintroduced later in a dataset-driven or scenario-driven eva
 
 ## Current Limitations
 
-### `expected_outcome_ok`
+The current structural layer is intentionally minimal:
 
-`expected_outcome_ok` is currently a placeholder set to `true`.
-
-It is intended to evolve into a scenario/profile-based contract check.
-
-### `rag_no_hallucinated_source_ok`
-
-This check is heuristic and depends on:
-- explicit source labels appearing in the answer,
-- comparable labels being present in `retrieval_context`.
-
-It should not be interpreted as a formal proof of citation correctness.
+- no citation validation,
+- no expected-outcome contract checking yet.
 
 ### Retrieval observability is not guaranteed
 
@@ -209,8 +158,9 @@ The CLI reflects the trace it receives; it does not infer hidden retrieval behav
 
 ## Future Directions
 
+The `rag` preset is now auto-resolved from `agent_tags`. When `agent_tags` contains a tag that maps to the `rag` preset, the CLI selects the RAG structural checks automatically. An explicit `PRESET=rag` override remains available.
+
 Possible next steps:
-- add evaluation profiles,
 - support scenario-level `expected_outcome`,
 - support dataset-driven evaluation with `expected_output`,
 - reintroduce `ContextualPrecisionMetric` in annotated evaluation mode,
