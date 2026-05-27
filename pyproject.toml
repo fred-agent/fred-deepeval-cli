@@ -25,6 +25,7 @@ eval = [
   "deepeval",
   "litellm",
   "rich>=13.0",
+  "temporalio",
 ]
 
 [project.scripts]

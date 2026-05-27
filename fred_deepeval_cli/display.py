@@ -41,7 +41,25 @@ def _check_detail(name: str, trace: dict) -> str:
     return "—"
 
 
-def render_score(payload: dict) -> None:
+def _skipped_metrics(preset: str, trace: dict, expected_output: str | None) -> list[tuple[str, str]]:
+    """Retourne les métriques non exécutées avec la raison."""
+    skipped: list[tuple[str, str]] = []
+    retrieval_context = trace.get("retrieval_context") or []
+
+    if preset == "rag":
+        if not retrieval_context:
+            skipped.append(("FaithfulnessMetric",         "retrieval_context vide"))
+            skipped.append(("ContextualRelevancyMetric",  "retrieval_context vide"))
+            skipped.append(("ContextualPrecisionMetric",  "retrieval_context vide"))
+            skipped.append(("ContextualRecallMetric",     "retrieval_context vide"))
+        elif not expected_output:
+            skipped.append(("ContextualPrecisionMetric",  "expected_output non fourni"))
+            skipped.append(("ContextualRecallMetric",     "expected_output non fourni"))
+
+    return skipped
+
+
+def render_score(payload: dict, expected_output: str | None = None) -> None:
     trace: dict = payload.get("trace", {})
     outcome: str = payload.get("outcome", "unknown")
     preset: str = payload.get("preset", "default")
@@ -89,7 +107,9 @@ def render_score(payload: dict) -> None:
 
     # ── DeepEval Metrics ────────────────────────────────────────────────────
     metrics: list[dict] = deepeval.get("metrics", [])
-    if metrics:
+    skipped = _skipped_metrics(preset, trace, expected_output)
+
+    if metrics or skipped:
         table = Table(box=box.SIMPLE, show_header=True, header_style="bold blue")
         table.add_column("Metric", style="cyan")
         table.add_column("Score", justify="right")
@@ -105,6 +125,9 @@ def render_score(payload: dict) -> None:
                 _check_icon(m.get("success")),
                 m.get("reason") or "—",
             )
+
+        for name, reason in skipped:
+            table.add_row(name, "—", "⏭", reason, style="dim")
 
         console.print(Panel(table, title="DeepEval Metrics", border_style="blue"))
 
@@ -125,4 +148,85 @@ def render_score(payload: dict) -> None:
             meta_table.add_row(k, str(v))
         console.print(Panel(meta_table, title="Run Metadata", border_style="dim"))
 
+    console.print()
+
+
+# ── Campagne ────────────────────────────────────────────────────────────────
+
+_CAMPAIGN_METRICS = [
+    "AnswerRelevancyMetric",
+    "FaithfulnessMetric",
+    "ContextualRelevancyMetric",
+    "ContextualPrecisionMetric",
+    "ContextualRecallMetric",
+]
+
+
+def _fmt_score(metrics_by_name: dict, name: str, totals: dict) -> str:
+    m = metrics_by_name.get(name)
+    if m is None:
+        return "—"
+    score = m.get("score")
+    if score is None:
+        return "—"
+    totals[name].append(score)
+    icon = "✅" if m.get("success") else "❌"
+    return f"{score:.2f}{icon}"
+
+
+def render_campaign(results: list[dict]) -> None:
+    """Affiche le tableau récapitulatif d'une campagne RAG."""
+    totals: dict[str, list[float]] = {m: [] for m in _CAMPAIGN_METRICS}
+
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+    table.add_column("ID", style="dim", width=22)
+    table.add_column("Outcome", width=10)
+    table.add_column("RAG", justify="center", width=5)
+    table.add_column("AnswerRel", justify="right", width=10)
+    table.add_column("Faithful", justify="right", width=10)
+    table.add_column("CtxRel", justify="right", width=8)
+    table.add_column("CtxPrec", justify="right", width=9)
+    table.add_column("CtxRecall", justify="right", width=10)
+
+    for r in results:
+        table.add_row(
+            r["id"],
+            r["outcome"],
+            "✅" if r.get("rag_ok") else "❌",
+            _fmt_score(r["metrics"], "AnswerRelevancyMetric", totals),
+            _fmt_score(r["metrics"], "FaithfulnessMetric", totals),
+            _fmt_score(r["metrics"], "ContextualRelevancyMetric", totals),
+            _fmt_score(r["metrics"], "ContextualPrecisionMetric", totals),
+            _fmt_score(r["metrics"], "ContextualRecallMetric", totals),
+        )
+
+    console.print()
+    console.print(Panel(table, title="Résultats par scénario", border_style="cyan"))
+
+    # ── Moyennes ─────────────────────────────────────────────────────────────
+    avg_table = Table(box=box.SIMPLE, show_header=True, header_style="bold blue")
+    avg_table.add_column("Métrique", style="cyan")
+    avg_table.add_column("Moyenne", justify="right")
+    avg_table.add_column("N", justify="right", style="dim")
+
+    overall: list[float] = []
+    for name in _CAMPAIGN_METRICS:
+        scores = totals[name]
+        if scores:
+            avg = sum(scores) / len(scores)
+            overall.append(avg)
+            avg_table.add_row(name, f"{avg:.4f}  ({avg * 100:.1f}%)", str(len(scores)))
+        else:
+            avg_table.add_row(name, "—", "0")
+
+    if overall:
+        global_avg = sum(overall) / len(overall)
+        avg_table.add_row(
+            "OVERALL",
+            f"{global_avg:.4f}  ({global_avg * 100:.1f}%)",
+            "",
+            style="bold",
+        )
+
+    console.print(Panel(avg_table, title="Moyennes par métrique", border_style="blue"))
     console.print()

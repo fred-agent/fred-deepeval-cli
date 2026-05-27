@@ -703,6 +703,7 @@ eval = [
     { name = "deepeval" },
     { name = "litellm" },
     { name = "rich" },
+    { name = "temporalio" },
 ]
 
 [package.metadata]
@@ -719,6 +720,7 @@ requires-dist = [
     { name = "pytest-socket", marker = "extra == 'dev'", specifier = ">=0.7.0" },
     { name = "rich", marker = "extra == 'eval'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.5" },
+    { name = "temporalio", marker = "extra == 'eval'" },
 ]
 provides-extras = ["dev", "eval"]
 
