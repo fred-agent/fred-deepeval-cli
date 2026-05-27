@@ -34,3 +34,6 @@ config/.env
 .DS_Store
 .vscode/
 .idea/
+
+# DeepEval local cache
+.deepeval/
