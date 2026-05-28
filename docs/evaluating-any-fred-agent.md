@@ -1,5 +1,35 @@
 # Evaluating Any Fred Agent Pod
 
+## Prerequisites — minimum versions
+
+`agent_tags` was added to `EvalTrace` in **fred-sdk 2.0.6** and **fred-runtime 2.0.7**.
+
+Pods running older versions will return an `EvalTrace` without the `agent_tags` field. The CLI falls back to `preset: "default"` and only computes `AnswerRelevancy` — all contextual RAG metrics (`Faithfulness`, `ContextualRelevancy`, `ContextualPrecision`, `ContextualRecall`) will be missing.
+
+**Before running a campaign against any pod, verify the installed versions:**
+
+```bash
+curl -s <BASE_URL>/agents/evaluate \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"agent_id":"<AGENT_ID>","input":"test","session_id":"version-check","runtime_context":{"user_id":"alice"}}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('agent_tags:', d.get('agent_tags','MISSING — upgrade fred-sdk/fred-runtime'))"
+```
+
+For `dt-agents`, install the local sources before starting the pod:
+
+```bash
+cd dt-agents/agents
+make dev-local   # installs fred-sdk>=2.0.6 and fred-runtime>=2.0.7 from ../../fred/libs
+```
+
+> **Note:** `make run` uses `uv run` which re-syncs from `uv.lock` on every startup and will revert editable installs. Start the pod with the venv activated instead:
+> ```bash
+> source .venv/bin/activate
+> ENV_FILE=config/.env python -m fred_dt_agents
+> ```
+
+---
+
 ## Overview
 
 `fred-deepeval-cli` can evaluate any agent pod built on `fred-runtime` — including `dt-agents` — without any modification to the CLI itself.
