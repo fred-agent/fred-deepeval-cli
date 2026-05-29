@@ -8,7 +8,9 @@ It covers:
 - the role of the bearer token;
 - the `SEARCH_POLICY=semantic` configuration;
 - starting the required local services;
-- the `make score` command.
+- the `make score` command;
+- running a full campaign with `make rag-scenarios`;
+- parallelising scenarios with `USE_TEMPORAL=1`.
 
 ---
 
@@ -103,15 +105,15 @@ make score \
   SEARCH_POLICY=semantic
 ```
 
-### Affichage et sortie machine
+### Output modes
 
-Le CLI utilise [Rich](https://github.com/Textualize/rich) pour un affichage lisible dans le terminal (`stderr`), tout en émettant le résultat complet en JSON sur `stdout` — ce qui permet de le consommer directement depuis une UI ou un script.
+The CLI uses [Rich](https://github.com/Textualize/rich) for human-readable output on `stderr`, and emits the full result as JSON on `stdout` — so it can be consumed directly by a UI or a script.
 
-| Cas d'usage | Commande |
+| Use case | Command |
 |---|---|
-| Affichage Rich seul dans le terminal | `make score ... > /dev/null` |
-| JSON seul (pour un script ou une UI) | `make score ... 2> /dev/null` |
-| Les deux (comportement par défaut) | `make score ...` |
+| Rich display only | `make score ... > /dev/null` |
+| JSON only (for a script or UI) | `make score ... 2> /dev/null` |
+| Both (default) | `make score ...` |
 
 ---
 
@@ -124,3 +126,40 @@ make score \
   ... \
   PRESET=rag
 ```
+
+---
+
+## `make rag-scenarios` — Full Campaign
+
+Runs all questions from `tests/rag_dataset.json` against a given agent and scores each one with DeepEval:
+
+```bash
+make rag-scenarios \
+  BASE_URL=http://127.0.0.1:8000/fred/agents/v2 \
+  AGENT_ID=fred.github.rag_expert \
+  ACCESS_TOKEN="$FRED_ACCESS_TOKEN" \
+  SEARCH_POLICY=semantic \
+  > /dev/null
+```
+
+Without extra flags, questions run **sequentially** — one at a time.
+
+---
+
+## `USE_TEMPORAL=1` — Parallel Execution
+
+By default, scenarios run one by one. With `USE_TEMPORAL=1`, the CLI starts an **in-memory Temporal server** and runs all scenarios in parallel — no external Temporal server required.
+
+```bash
+make rag-scenarios \
+  BASE_URL=http://127.0.0.1:8000/fred/agents/v2 \
+  AGENT_ID=fred.github.rag_expert \
+  ACCESS_TOKEN="$FRED_ACCESS_TOKEN" \
+  SEARCH_POLICY=semantic \
+  USE_TEMPORAL=1 \
+  > /dev/null
+```
+
+**Why it matters:** wall-clock time drops from `N × t` (sequential) to `≈ t` (parallel), where `t` is the time for one scenario. For a 5-question dataset with a slow agent (e.g. Aegis with 13 search calls per question), this reduces a 70-minute run to ~14 minutes.
+
+> **Note:** Temporal in-memory mode logs a few harmless `ERROR` messages about queue readers during startup — these can be ignored. They appear because the in-memory server initialises asynchronously.
