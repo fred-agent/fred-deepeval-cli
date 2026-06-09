@@ -38,7 +38,14 @@ def build_judge_model():
             request_timeout=120,
             num_retries=0,
         )
-
+    if provider == "ollama":
+        return LiteLLMModel(
+            model=f"ollama/{model_name}",
+            api_key="ollama",  # LiteLLM requires a non-empty api_key
+            base_url=config.judge.api_base or "http://localhost:11434",
+            request_timeout=300,  # modèles locaux plus lents
+            num_retries=0,
+        )
     if provider == "openai":
         return GPTModel(model=model_name)
 
