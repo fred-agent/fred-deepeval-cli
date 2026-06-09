@@ -10,6 +10,10 @@ from fred_deepeval_cli.preset_resolver import resolve_preset
 from fred_deepeval_cli.eval_client import fetch_trace
 from fred_deepeval_cli.structural_checks import build_structural_checks
 from fred_deepeval_cli.display import render_score
+from dotenv import load_dotenv
+
+dotenv_path = os.getenv("ENV_FILE", "./config/.env")
+load_dotenv(dotenv_path)
 
 
 def build_parser() -> argparse.ArgumentParser:

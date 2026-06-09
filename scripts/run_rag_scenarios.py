@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
+import os 
 
 from fred_deepeval_cli.display import console, render_campaign
 from fred_deepeval_cli.classify import classify_turn
@@ -13,7 +14,10 @@ from fred_deepeval_cli.deepeval_runner import score_trace
 from fred_deepeval_cli.eval_client import fetch_trace
 from fred_deepeval_cli.preset_resolver import resolve_preset
 from fred_deepeval_cli.structural_checks import build_structural_checks
+from dotenv import load_dotenv
 
+dotenv_path = os.getenv("ENV_FILE", "./config/.env")
+load_dotenv(dotenv_path)
 DEFAULT_DATASET_PATH = (
     Path(__file__).resolve().parents[1] / "tests" / "rag_dataset.json"
 )
@@ -79,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--user-id", default="alice", help="Runtime user identifier.")
     parser.add_argument("--team-id", help="Optional runtime team identifier.")
-    parser.add_argument("--access-token", help="Optional bearer token.")
+    parser.add_argument("--access-token", default=os.environ.get("FRED_ACCESS_TOKEN"), help="Optional bearer token.")
     parser.add_argument("--search-policy", default="semantic", help="Search policy.")
     parser.add_argument(
         "--dataset",

@@ -6,10 +6,15 @@ from numbers import Number
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
+import os
 
 from fred_deepeval_cli.classify import classify_turn
 from fred_deepeval_cli.eval_client import fetch_trace
 from fred_deepeval_cli.structural_checks import build_structural_checks
+from dotenv import load_dotenv
+
+dotenv_path = os.getenv("ENV_FILE", "./config/.env")
+load_dotenv(dotenv_path)
 
 DEFAULT_SCENARIOS_PATH = (
     Path(__file__).resolve().parents[1] / "tests" / "sql_scenarios.json"
@@ -227,7 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Runtime user identifier.",
     )
     parser.add_argument("--team-id", help="Optional runtime team identifier.")
-    parser.add_argument("--access-token", help="Optional bearer token.")
+    parser.add_argument("--access-token", default=os.environ.get("FRED_ACCESS_TOKEN"), help="Optional bearer token.")
     parser.add_argument(
         "--scenarios",
         default=str(DEFAULT_SCENARIOS_PATH),

@@ -9,6 +9,9 @@ include scripts/makefiles/python-test.mk
 include scripts/makefiles/python-clean.mk
 include scripts/makefiles/help.mk
 
+ENV_FILE := $(ROOT_DIR)/config/.env
+export ENV_FILE 
+
 .PHONY: cli
 cli: dev ## Run the external EvalTrace CLI
 	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.main --help
