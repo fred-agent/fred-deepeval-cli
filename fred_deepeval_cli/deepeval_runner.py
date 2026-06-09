@@ -21,32 +21,42 @@ from deepeval.metrics import (
 
 def build_judge_model():
     config = load_configuration()
-    provider = config.judge.provider
-    model_name = config.judge.model
+    profile = config.judge.active()
+    provider = profile.provider
+    model_name = profile.model
+    settings = profile.settings
 
     if provider == "litellm":
-        api_key = os.environ.get("LITELLM_API_KEY")
+        api_key_env = settings.api_key_env or "LITELLM_API_KEY"
+        api_key = os.environ.get(api_key_env)
         if not api_key:
             raise RuntimeError(
-                "Missing LITELLM_API_KEY in environment/.env for the litellm judge."
+                f"Missing {api_key_env} in environment/.env for the litellm judge."
             )
-
         return LiteLLMModel(
             model=model_name,
             api_key=api_key,
-            base_url=config.judge.api_base,
-            request_timeout=120,
+            base_url=settings.api_base,
+            request_timeout=settings.request_timeout,
             num_retries=0,
         )
+
     if provider == "ollama":
         return LiteLLMModel(
             model=f"ollama/{model_name}",
             api_key="ollama",  # LiteLLM requires a non-empty api_key
-            base_url=config.judge.api_base or "http://localhost:11434",
-            request_timeout=300,  # modèles locaux plus lents
+            base_url=settings.api_base or "http://localhost:11434",
+            request_timeout=settings.request_timeout,
             num_retries=0,
         )
+
     if provider == "openai":
+        api_key_env = settings.api_key_env or "OPENAI_API_KEY"
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            raise RuntimeError(
+                f"Missing {api_key_env} in environment/.env for the openai judge."
+            )
         return GPTModel(model=model_name)
 
     raise ValueError(f"Unsupported judge provider: {provider}")

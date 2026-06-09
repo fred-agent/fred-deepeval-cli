@@ -6,13 +6,35 @@ from fred_core.common import ConfigFiles, load_configuration_with_config_files
 from pydantic import BaseModel
 
 
-class JudgeConfig(BaseModel):
-    provider: str = "litellm"
-    model: str = "mistral/mistral-large-latest"
+class JudgeProfileSettings(BaseModel):
     api_base: str | None = None
+    api_key_env: str | None = None
+    request_timeout: int = 120
+
+
+class JudgeProfile(BaseModel):
+    profile_id: str
+    provider: str
+    model: str
+    settings: JudgeProfileSettings = JudgeProfileSettings()
+
+
+class JudgeConfig(BaseModel):
+    default: str
+    profiles: list[JudgeProfile]
+
+    def active(self) -> JudgeProfile:
+        for p in self.profiles:
+            if p.profile_id == self.default:
+                return p
+        raise ValueError(
+            f"Judge profile '{self.default}' not found. "
+            f"Available: {[p.profile_id for p in self.profiles]}"
+        )
 
 
 class Configuration(BaseModel):
+    version: str = "v1"
     judge: JudgeConfig
 
 
