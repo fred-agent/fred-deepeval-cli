@@ -1,66 +1,63 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from types import SimpleNamespace
 
 from temporalio import activity, workflow
 from temporalio.client import Client
 from temporalio.worker import Worker, UnsandboxedWorkflowRunner
 from temporalio.testing import WorkflowEnvironment
 
-from fred_deepeval_cli.classify import classify_turn
-from fred_deepeval_cli.deepeval_runner import score_trace
-from fred_deepeval_cli.eval_client import fetch_trace
-from fred_deepeval_cli.preset_resolver import resolve_preset
-from fred_deepeval_cli.structural_checks import build_structural_checks
+from fred_deepeval_cli.core.models import EvaluationCaseRequest
+from fred_deepeval_cli.core.evaluator import evaluate_case_sync
+from fred_deepeval_cli.core.judge_factory import build_judge
 
 
 @activity.defn
 async def evaluate_question_activity(params: dict) -> dict:
     """Une question = une activity Temporal."""
-    args = SimpleNamespace(
-        base_url=params["base_url"],
+    request = EvaluationCaseRequest(
         agent_id=params["agent_id"],
         input=params["input"],
         session_id=params["session_id"],
-        user_id=params["user_id"],
-        team_id=params.get("team_id"),
-        access_token=params.get("access_token"),
-        search_policy=params.get("search_policy"),
+        expected_output=params.get("expected_answer"),
+        profile=params.get("profile", "auto"),
+        runtime_context={
+            "user_id": params["user_id"],
+            **({"team_id": params["team_id"]} if params.get("team_id") else {}),
+            **({"search_policy": params["search_policy"]} if params.get("search_policy") else {}),
+        },
     )
 
     try:
-        trace = fetch_trace(args)
+        judge = build_judge()
+        result = evaluate_case_sync(
+            base_url=params["base_url"],
+            request=request,
+            judge=judge,
+            access_token=params.get("access_token"),
+        )
     except Exception as e:
         return {
             "id": params["id"],
             "input": params["input"],
             "outcome": "error",
-            "preset": "unknown",
+            "profile": "unknown",
             "rag_ok": False,
-            "structural_checks": {},
-            "metrics": {},
+            "structural_checks": [],
+            "metrics": [],
             "error": str(e),
         }
 
-    outcome = classify_turn(trace)
-    preset = resolve_preset(trace)
-    checks = build_structural_checks(trace, preset=preset)
-    expected_output = params.get("expected_answer")
-    deepeval_result = score_trace(trace, preset=preset, expected_output=expected_output)
-
-    metrics_by_name = {m["name"]: m for m in deepeval_result.get("metrics", [])}
-    rag_ok = all(
-        v for k, v in checks.items() if k != "preset" and isinstance(v, bool)
-    )
+    rag_ok = all(c.passed for c in result.structural_checks)
+    metrics_by_name = {m.name: m.model_dump() for m in result.metrics}
 
     return {
         "id": params["id"],
         "input": params["input"],
-        "outcome": outcome,
-        "preset": preset,
+        "outcome": result.outcome,
+        "profile": result.profile,
         "rag_ok": rag_ok,
-        "structural_checks": {k: v for k, v in checks.items() if k != "preset"},
+        "structural_checks": [c.model_dump() for c in result.structural_checks],
         "metrics": metrics_by_name,
     }
 

@@ -3,24 +3,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from pathlib import Path
-from types import SimpleNamespace
 import uuid
-import os 
+import os
+from pathlib import Path
 
-from fred_deepeval_cli.display import console, render_campaign
-from fred_deepeval_cli.classify import classify_turn
-from fred_deepeval_cli.deepeval_runner import score_trace
-from fred_deepeval_cli.eval_client import fetch_trace
-from fred_deepeval_cli.preset_resolver import resolve_preset
-from fred_deepeval_cli.structural_checks import build_structural_checks
+from fred_deepeval_cli.cli.display import console, render_campaign
+from fred_deepeval_cli.core.models import EvaluationCaseRequest
+from fred_deepeval_cli.core.evaluator import evaluate_case_sync
+from fred_deepeval_cli.core.judge_factory import build_judge
 from dotenv import load_dotenv
 
 dotenv_path = os.getenv("ENV_FILE", "./config/.env")
 load_dotenv(dotenv_path)
+
 DEFAULT_DATASET_PATH = (
     Path(__file__).resolve().parents[1] / "tests" / "rag_dataset.json"
 )
+
 
 def load_dataset(path: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -38,37 +37,31 @@ def evaluate_scenario(
 ) -> dict:
     session_id = f"{scenario['id']}-{uuid.uuid4().hex[:8]}"
 
-    args = SimpleNamespace(
-        base_url=base_url,
+    request = EvaluationCaseRequest(
         agent_id=agent_id,
         input=scenario["input"],
         session_id=session_id,
-        user_id=user_id,
-        team_id=team_id,
-        access_token=access_token,
-        search_policy=search_policy,
+        expected_output=scenario.get("expected_answer"),
+        runtime_context={
+            "user_id": user_id,
+            **({"team_id": team_id} if team_id else {}),
+            **({"search_policy": search_policy} if search_policy else {}),
+        },
     )
 
-    trace = fetch_trace(args)
-    outcome = classify_turn(trace)
-    preset = resolve_preset(trace)
-    checks = build_structural_checks(trace, preset=preset)
-    expected_output = scenario.get("expected_answer")
-    deepeval_result = score_trace(trace, preset=preset, expected_output=expected_output)
+    judge = build_judge()
+    result = evaluate_case_sync(base_url=base_url, request=request, judge=judge, access_token=access_token)
 
-    metrics_by_name = {m["name"]: m for m in deepeval_result.get("metrics", [])}
-
-    rag_ok = all(
-        v for k, v in checks.items() if k != "preset" and isinstance(v, bool)
-    )
+    rag_ok = all(c.passed for c in result.structural_checks)
+    metrics_by_name = {m.name: {"score": m.score, "verdict": m.verdict, "explanation": m.explanation} for m in result.metrics}
 
     return {
         "id": scenario["id"],
         "input": scenario["input"],
-        "outcome": outcome,
-        "preset": preset,
+        "outcome": result.outcome,
+        "profile": result.profile,
         "rag_ok": rag_ok,
-        "structural_checks": {k: v for k, v in checks.items() if k != "preset"},
+        "structural_checks": [c.model_dump() for c in result.structural_checks],
         "metrics": metrics_by_name,
     }
 
@@ -77,35 +70,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run RAG evaluation scenarios against a fred RAG agent."
     )
-    parser.add_argument("--base-url", required=True, help="Fred pod base URL.")
-    parser.add_argument(
-        "--agent-id", default="fred.github.rag_expert", help="Agent identifier."
-    )
-    parser.add_argument("--user-id", default="alice", help="Runtime user identifier.")
-    parser.add_argument("--team-id", help="Optional runtime team identifier.")
-    parser.add_argument("--access-token", default=os.environ.get("FRED_ACCESS_TOKEN"), help="Optional bearer token.")
-    parser.add_argument("--search-policy", default="semantic", help="Search policy.")
-    parser.add_argument(
-        "--dataset",
-        default=str(DEFAULT_DATASET_PATH),
-        help="Path to rag_dataset.json.",
-    )
-    parser.add_argument(
-        "--use-temporal",
-        action="store_true",
-        default=False,
-        help="Run via Temporal in-memory (durable, retriable). Default: mode séquentiel simple.",
-    )
-    parser.add_argument(
-        "--temporal-server",
-        default=None,
-        help="URL du serveur Temporal (ex: localhost:7233). Si absent, mode in-memory.",
-    )
+    parser.add_argument("--base-url", required=True)
+    parser.add_argument("--agent-id", default="fred.github.rag_expert")
+    parser.add_argument("--user-id", default="alice")
+    parser.add_argument("--team-id")
+    parser.add_argument("--access-token", default=os.environ.get("FRED_ACCESS_TOKEN"))
+    parser.add_argument("--search-policy", default="semantic")
+    parser.add_argument("--dataset", default=str(DEFAULT_DATASET_PATH))
+    parser.add_argument("--use-temporal", action="store_true", default=False)
+    parser.add_argument("--temporal-server", default=None)
     return parser
 
 
 def _build_questions(dataset: list[dict], args: argparse.Namespace) -> list[dict]:
-    """Prépare les paramètres de chaque question pour Temporal ou le mode simple."""
     questions = []
     for scenario in dataset:
         questions.append({

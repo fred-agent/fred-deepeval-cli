@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from fred_deepeval_cli.preset_resolver import resolve_preset
+from fred_deepeval_cli.core.profiles import resolve_profile
 
 
-def test_resolve_preset_returns_explicit_value_when_forced() -> None:
+def test_resolve_profile_returns_explicit_value_when_forced() -> None:
     trace = {"agent_tags": ["rag", "documents", "react"]}
-    assert resolve_preset(trace, explicit_preset="sql") == "sql"
+    assert resolve_profile(trace, explicit_profile="sql") == "sql"
 
 
-def test_resolve_preset_returns_rag_from_agent_tags() -> None:
+def test_resolve_profile_returns_rag_from_agent_tags() -> None:
     trace = {"agent_tags": ["rag", "documents", "react"]}
-    assert resolve_preset(trace) == "rag"
+    assert resolve_profile(trace) == "rag"
 
 
-def test_resolve_preset_returns_sql_from_agent_tags() -> None:
+def test_resolve_profile_returns_sql_from_agent_tags() -> None:
     trace = {"agent_tags": ["sql", "tabular", "react"]}
-    assert resolve_preset(trace) == "sql"
+    assert resolve_profile(trace) == "sql"
 
 
-def test_resolve_preset_returns_default_when_no_known_tag_is_present() -> None:
+def test_resolve_profile_returns_default_when_no_known_tag_is_present() -> None:
     trace = {"agent_tags": ["general", "react"]}
-    assert resolve_preset(trace) == "default"
+    assert resolve_profile(trace) == "default"

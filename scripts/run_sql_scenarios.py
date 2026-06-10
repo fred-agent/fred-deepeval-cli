@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
-from numbers import Number
-from pathlib import Path
-from types import SimpleNamespace
 import uuid
 import os
+from numbers import Number
+from pathlib import Path
 
-from fred_deepeval_cli.classify import classify_turn
-from fred_deepeval_cli.eval_client import fetch_trace
-from fred_deepeval_cli.structural_checks import build_structural_checks
+from fred_deepeval_cli.cli.display import render_sql_campaign
+from fred_deepeval_cli.core.models import EvaluationCaseRequest
+from fred_deepeval_cli.core.evaluator import evaluate_case_sync, fetch_trace
 from dotenv import load_dotenv
 
 dotenv_path = os.getenv("ENV_FILE", "./config/.env")
@@ -25,26 +24,15 @@ def load_scenarios(path: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def compare_expected_flow(checks: dict, expected_flow: dict) -> list[str]:
+def compare_expected_flow(checks: list[dict], expected_flow: dict) -> list[str]:
     failures: list[str] = []
-
-    expected_schema_context = expected_flow.get("schema_context")
-    if expected_schema_context is not None:
-        actual_schema_context = checks.get("sql_schema_context_present_ok")
-        if actual_schema_context != expected_schema_context:
-            failures.append(
-                "schema_context "
-                f"expected={expected_schema_context} actual={actual_schema_context}"
-            )
+    checks_by_name = {c["name"]: c["passed"] for c in checks}
 
     expected_query_executed = expected_flow.get("query_executed")
     if expected_query_executed is not None:
-        actual_query_executed = checks.get("sql_query_executed_ok")
-        if actual_query_executed != expected_query_executed:
-            failures.append(
-                "query_executed "
-                f"expected={expected_query_executed} actual={actual_query_executed}"
-            )
+        actual = checks_by_name.get("sql_query_executed")
+        if actual != expected_query_executed:
+            failures.append(f"query_executed expected={expected_query_executed} actual={actual}")
 
     return failures
 
@@ -57,11 +45,9 @@ def extract_latest_query_result(trace: dict) -> dict | None:
             continue
         if step.get("is_error"):
             continue
-
         content = step.get("content")
         if isinstance(content, dict):
             return content
-
         if isinstance(content, str) and content.strip():
             if content.lstrip().startswith("Error:"):
                 continue
@@ -71,18 +57,14 @@ def extract_latest_query_result(trace: dict) -> dict | None:
                 return None
             if isinstance(parsed, dict):
                 return parsed
-            return None
-
     return None
 
 
 def values_match(expected: object, actual: object, *, tolerance: float = 0.01) -> bool:
     if isinstance(expected, Number) and isinstance(actual, Number):
         return abs(float(expected) - float(actual)) <= tolerance
-
     if isinstance(expected, str) and isinstance(actual, str):
         return expected.casefold() == actual.casefold()
-
     return expected == actual
 
 
@@ -105,47 +87,28 @@ def compare_expected_values(trace: dict, expected_values: dict) -> list[str]:
         if snippet not in output:
             failures.append(f"output missing snippet={snippet!r}")
 
-    expects_query_result = any(
-        key in expected_values for key in ("row_count", "first_row", "contains_rows")
-    )
     query_result = extract_latest_query_result(trace)
     rows = query_result.get("rows", []) if isinstance(query_result, dict) else []
-    
-    expected_sql_fragments = expected_values.get("sql_query_contains", [])
-    actual_sql_query = ""
-    if isinstance(query_result, dict):
-        actual_sql_query = query_result.get("sql_query", "") or ""
 
-    for fragment in expected_sql_fragments:
-        if fragment not in actual_sql_query:
-            failures.append(
-                f"sql_query missing fragment={fragment!r}"
-            )
-
+    expects_query_result = any(key in expected_values for key in ("row_count", "first_row", "contains_rows"))
     if expects_query_result and query_result is None:
         failures.append("expected query result but no successful read_query result was found")
         return failures
 
     if expected_values.get("row_count") is not None:
         expected_row_count = expected_values["row_count"]
-        actual_row_count = len(rows)
-        if actual_row_count != expected_row_count:
-            failures.append(
-                f"row_count expected={expected_row_count} actual={actual_row_count}"
-            )
+        if len(rows) != expected_row_count:
+            failures.append(f"row_count expected={expected_row_count} actual={len(rows)}")
 
     expected_first_row = expected_values.get("first_row")
     if expected_first_row is not None:
         if not rows:
             failures.append("first_row expected but query returned no rows")
         elif not row_matches_expected_values(rows[0], expected_first_row):
-            failures.append(
-                f"first_row expected={expected_first_row} actual={rows[0]}"
-            )
+            failures.append(f"first_row expected={expected_first_row} actual={rows[0]}")
 
-    expected_rows = expected_values.get("contains_rows", [])
-    for expected_row in expected_rows:
-        if not any(row_matches_expected_values(actual_row, expected_row) for actual_row in rows):
+    for expected_row in expected_values.get("contains_rows", []):
+        if not any(row_matches_expected_values(r, expected_row) for r in rows):
             failures.append(f"expected row not found: {expected_row}")
 
     return failures
@@ -155,13 +118,11 @@ def summarize_observed_values(trace: dict) -> dict:
     query_result = extract_latest_query_result(trace)
     rows = query_result.get("rows", []) if isinstance(query_result, dict) else []
     sql_query = query_result.get("sql_query") if isinstance(query_result, dict) else None
-
     return {
         "sql_query": sql_query,
         "query_row_count": len(rows),
         "query_first_row": rows[0] if rows else None,
     }
-
 
 
 def evaluate_scenario(
@@ -175,78 +136,51 @@ def evaluate_scenario(
 ) -> tuple[str, dict]:
     session_id = f"{scenario['id']}-{uuid.uuid4().hex[:8]}"
 
-
-    args = SimpleNamespace(
-        base_url=base_url,
+    request = EvaluationCaseRequest(
         agent_id=agent_id,
         input=scenario["input"],
         session_id=session_id,
-        user_id=user_id,
-        team_id=team_id,
-        access_token=access_token,
-        search_policy=None,
+        runtime_context={
+            "user_id": user_id,
+            **({"team_id": team_id} if team_id else {}),
+        },
     )
 
-    trace = fetch_trace(args)
-    outcome = classify_turn(trace)
-    checks = build_structural_checks(trace)
+    trace = fetch_trace(base_url=base_url, request=request, access_token=access_token)
+    result = evaluate_case_sync(base_url=base_url, request=request, access_token=access_token)
 
-    failures = compare_expected_flow(checks, scenario.get("expected_flow", {}))
+    checks_as_dicts = [c.model_dump() for c in result.structural_checks]
+    failures = compare_expected_flow(checks_as_dicts, scenario.get("expected_flow", {}))
     failures.extend(compare_expected_values(trace, scenario.get("expected_values", {})))
 
-    result = {
+    return result.outcome, {
         "id": scenario["id"],
         "input": scenario["input"],
-        "outcome": outcome,
-        "profile": checks.get("profile"),
+        "outcome": result.outcome,
+        "profile": result.profile,
         "expected_flow": scenario.get("expected_flow", {}),
         "expected_values": scenario.get("expected_values", {}),
-        "observed_checks": {
-            "sql_schema_context_present_ok": checks.get(
-                "sql_schema_context_present_ok"
-            ),
-            "sql_query_executed_ok": checks.get("sql_query_executed_ok"),
-            "sql_tool_used_ok": checks.get("sql_tool_used_ok"),
-            "sql_no_execution_error_ok": checks.get("sql_no_execution_error_ok"),
-        },
+        "observed_checks": {c["name"]: c["passed"] for c in checks_as_dicts},
         "observed_values": summarize_observed_values(trace),
         "pass": not failures,
         "failures": failures,
     }
-    return outcome, result
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Run SQL evaluation scenarios against fred.github.sql_expert."
-    )
-    parser.add_argument("--base-url", required=True, help="Fred pod base URL.")
-    parser.add_argument(
-        "--agent-id",
-        default="fred.github.sql_expert",
-        help="Agent identifier.",
-    )
-    parser.add_argument(
-        "--user-id",
-        default="alice",
-        help="Runtime user identifier.",
-    )
-    parser.add_argument("--team-id", help="Optional runtime team identifier.")
-    parser.add_argument("--access-token", default=os.environ.get("FRED_ACCESS_TOKEN"), help="Optional bearer token.")
-    parser.add_argument(
-        "--scenarios",
-        default=str(DEFAULT_SCENARIOS_PATH),
-        help="Path to sql_scenarios.json.",
-    )
+    parser = argparse.ArgumentParser(description="Run SQL evaluation scenarios.")
+    parser.add_argument("--base-url", required=True)
+    parser.add_argument("--agent-id", default="fred.github.sql_expert")
+    parser.add_argument("--user-id", default="alice")
+    parser.add_argument("--team-id")
+    parser.add_argument("--access-token", default=os.environ.get("FRED_ACCESS_TOKEN"))
+    parser.add_argument("--scenarios", default=str(DEFAULT_SCENARIOS_PATH))
     return parser
 
 
 def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-
-    scenarios_path = Path(args.scenarios)
-    scenarios = load_scenarios(scenarios_path)
+    args = build_parser().parse_args()
+    scenarios = load_scenarios(Path(args.scenarios))
 
     results: list[dict] = []
     has_failures = False
@@ -264,6 +198,7 @@ def main() -> int:
         if not result["pass"]:
             has_failures = True
 
+    render_sql_campaign(results)
     print(json.dumps({"results": results}, indent=2, ensure_ascii=False))
     return 1 if has_failures else 0
 

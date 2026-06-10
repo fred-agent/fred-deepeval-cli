@@ -14,7 +14,7 @@ export ENV_FILE
 
 .PHONY: cli
 cli: dev ## Run the external EvalTrace CLI
-	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.main --help
+	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.cli.main --help
 
 .PHONY: eval-dev
 eval-dev: ## Install dev + DeepEval dependencies
@@ -26,7 +26,7 @@ score: eval-dev ## Evaluate one Fred agent turn: trace + structural checks + Dee
 		echo "Usage: make score BASE_URL=http://127.0.0.1:8000/fred/agents/v2 AGENT_ID=fred.test.assistant INPUT='echo bonjour' SESSION_ID=eval-001 USER_ID=alice [TEAM_ID=my-team] [PRESET=auto]"; \
 		exit 1; \
 	fi
-	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.main score \
+	VIRTUAL_ENV= $(UV) run python -m fred_deepeval_cli.cli.main score \
 		--base-url "$(BASE_URL)" \
 		--agent-id "$(AGENT_ID)" \
 		--input "$(INPUT)" \
@@ -35,7 +35,7 @@ score: eval-dev ## Evaluate one Fred agent turn: trace + structural checks + Dee
 		$(if $(TEAM_ID),--team-id "$(TEAM_ID)",) \
 		$(if $(ACCESS_TOKEN),--access-token "$(ACCESS_TOKEN)",) \
 		$(if $(SEARCH_POLICY),--search-policy "$(SEARCH_POLICY)",) \
-		$(if $(PRESET),--preset "$(PRESET)",)
+		$(if $(PROFILE),--profile "$(PROFILE)",)
 
 .PHONY: rag-scenarios
 rag-scenarios: eval-dev ## Run the RAG scenario campaign against fred.github.rag_expert

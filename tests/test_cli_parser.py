@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fred_deepeval_cli.main import build_parser
+from fred_deepeval_cli.cli.main import build_parser
 
 
 def test_build_parser_parses_score_command(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -27,7 +27,7 @@ def test_build_parser_parses_score_command(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     assert args.command == "score"
-    assert args.preset == "auto"
+    assert args.profile == "auto"
     assert args.base_url == "http://127.0.0.1:8000/fred/agents/v2"
     assert args.agent_id == "fred.test.assistant"
     assert args.input == "echo bonjour"

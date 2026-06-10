@@ -30,7 +30,7 @@ eval = [
 ]
 
 [project.scripts]
-fred-deepeval-cli = "fred_deepeval_cli.main:main"
+fred-deepeval-cli = "fred_deepeval_cli.cli.main:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

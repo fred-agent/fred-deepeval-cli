@@ -1,23 +1,16 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from fred_deepeval_cli.deepeval_adapter import trace_to_test_case
-
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-
-
-def load_fixture(name: str) -> dict:
-    return json.loads((FIXTURES_DIR / name).read_text(encoding="utf-8"))
+from fred_deepeval_cli.test_helpers import make_trace
+from fred_deepeval_cli.core.scorer import _trace_to_test_case
 
 
 def test_trace_to_test_case_maps_input_output_and_retrieval_context() -> None:
-    trace = load_fixture("success_with_retrieval.json")
-
-    test_case = trace_to_test_case(trace)
-
-    assert test_case.input == trace["input"]
-    assert test_case.actual_output == trace["output"]
-    assert test_case.retrieval_context == trace["retrieval_context"]
+    trace = make_trace(
+        input="What is Fred?",
+        output="Fred is an agent platform.",
+        retrieval_context=["Fred is an agent platform built on LangGraph."],
+    )
+    test_case = _trace_to_test_case(trace, expected_output="Fred is an agent platform.")
+    assert test_case.input == "What is Fred?"
+    assert test_case.actual_output == "Fred is an agent platform."
+    assert test_case.retrieval_context == ["Fred is an agent platform built on LangGraph."]

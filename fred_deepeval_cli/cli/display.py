@@ -6,6 +6,8 @@ from rich.table import Table
 from rich import box
 from rich.text import Text
 
+from fred_deepeval_cli.core.models import EvaluationCaseRequest, EvaluationCaseResult
+
 console = Console(stderr=True)
 
 
@@ -19,134 +21,67 @@ def _outcome_text(outcome: str) -> Text:
     return Text(f"  {outcome}", style="bold green")
 
 
-def _check_detail(name: str, trace: dict) -> str:
-    """Retourne la valeur concrète observée dans la trace pour chaque check."""
-    if name == "rag_tool_used_ok":
-        tools = trace.get("tools_called", [])
-        return ", ".join(tools) if tools else "aucun outil appelé"
-
-    if name == "rag_context_nonempty_ok":
-        chunks = trace.get("retrieval_context", [])
-        return f"{len(chunks)} chunk(s)" if chunks else "retrieval_context vide"
-
-    if name == "sql_query_executed_ok":
-        steps = trace.get("steps", [])
-        calls = [s for s in steps if s.get("kind") == "tool_call" and s.get("tool_name") == "read_query"]
-        return f"read_query appelé {len(calls)} fois" if calls else "read_query non appelé"
-
-    if name == "sql_no_execution_error_ok":
-        error = trace.get("error")
-        return f"erreur : {error}" if error else "aucune erreur détectée"
-
-    return "—"
-
-
-def _skipped_metrics(preset: str, trace: dict, expected_output: str | None) -> list[tuple[str, str]]:
-    """Retourne les métriques non exécutées avec la raison."""
-    skipped: list[tuple[str, str]] = []
-    retrieval_context = trace.get("retrieval_context") or []
-
-    if preset == "rag":
-        if not retrieval_context:
-            skipped.append(("FaithfulnessMetric",         "retrieval_context vide"))
-            skipped.append(("ContextualRelevancyMetric",  "retrieval_context vide"))
-            skipped.append(("ContextualPrecisionMetric",  "retrieval_context vide"))
-            skipped.append(("ContextualRecallMetric",     "retrieval_context vide"))
-        elif not expected_output:
-            skipped.append(("ContextualPrecisionMetric",  "expected_output non fourni"))
-            skipped.append(("ContextualRecallMetric",     "expected_output non fourni"))
-
-    return skipped
-
-
-def render_score(payload: dict, expected_output: str | None = None) -> None:
-    trace: dict = payload.get("trace", {})
-    outcome: str = payload.get("outcome", "unknown")
-    preset: str = payload.get("preset", "default")
-    structural: dict = payload.get("structural_checks", {})
-    deepeval: dict = payload.get("deepeval", {})
-    run_meta: dict = payload.get("run_metadata", {})
-    errors: list = payload.get("scoring_errors", [])
-
+def render_score(
+    result: EvaluationCaseResult,
+    request: EvaluationCaseRequest | None = None,
+) -> None:
     # ── Header ──────────────────────────────────────────────────────────────
     header = Table.grid(padding=(0, 2))
     header.add_column(style="bold cyan")
     header.add_column()
-    header.add_row("Agent", trace.get("agent_id", "—"))
-    header.add_row("Session", trace.get("session_id", "—"))
-    header.add_row("User", trace.get("user_id", "—"))
-    header.add_row("Preset", preset)
-    header.add_row("Input", trace.get("input", "—"))
+    if request:
+        header.add_row("Agent", request.agent_id)
+        header.add_row("Session", request.session_id)
+        header.add_row("Input", request.input)
+    header.add_row("Profile", result.profile)
 
     console.print()
     console.print(Panel(header, title="[bold]fred-deepeval-cli[/bold]", border_style="cyan"))
 
     # ── Output agent ────────────────────────────────────────────────────────
-    agent_output = trace.get("output") or "—"
+    agent_output = result.actual_output or "—"
     console.print(Panel(agent_output, title="Output", border_style="yellow"))
 
     # ── Outcome ─────────────────────────────────────────────────────────────
     console.print(Panel(
-        _outcome_text(outcome),
+        _outcome_text(result.outcome),
         title="Outcome",
-        border_style="green" if outcome != "execution_error" else "red",
+        border_style="green" if result.outcome != "execution_error" else "red",
     ))
 
     # ── Structural Checks ───────────────────────────────────────────────────
-    check_items = {k: v for k, v in structural.items() if k != "preset"}
-    if check_items:
+    if result.structural_checks:
         table = Table(box=box.SIMPLE, show_header=True, header_style="bold magenta")
         table.add_column("Check", style="cyan")
         table.add_column("", justify="center")
-        table.add_column("Observé dans la trace", style="dim", no_wrap=False, max_width=50)
 
-        for name, value in check_items.items():
-            table.add_row(name, _check_icon(value), _check_detail(name, trace))
+        for check in result.structural_checks:
+            table.add_row(check.name, _check_icon(check.passed))
 
-        console.print(Panel(table, title=f"Structural Checks [{preset}]", border_style="magenta"))
+        console.print(Panel(table, title=f"Structural Checks [{result.profile}]", border_style="magenta"))
 
     # ── DeepEval Metrics ────────────────────────────────────────────────────
-    metrics: list[dict] = deepeval.get("metrics", [])
-    skipped = _skipped_metrics(preset, trace, expected_output)
-
-    if metrics or skipped:
+    if result.metrics:
         table = Table(box=box.SIMPLE, show_header=True, header_style="bold blue")
         table.add_column("Metric", style="cyan")
         table.add_column("Score", justify="right")
         table.add_column("", justify="center")
         table.add_column("Reason", style="dim", no_wrap=False, max_width=60)
 
-        for m in metrics:
-            score_val = m.get("score")
-            score_str = f"{score_val:.2f}" if isinstance(score_val, float) else str(score_val)
-            table.add_row(
-                m.get("name", "—"),
-                score_str,
-                _check_icon(m.get("success")),
-                m.get("reason") or "—",
-            )
-
-        for name, reason in skipped:
-            table.add_row(name, "—", "⏭", reason, style="dim")
+        for m in result.metrics:
+            score_str = f"{m.score:.2f}" if isinstance(m.score, float) else "—"
+            icon = "✅" if m.verdict == "passed" else ("⏭" if m.verdict == "skipped" else "❌")
+            table.add_row(m.name, score_str, icon, m.explanation or m.error or "—")
 
         console.print(Panel(table, title="DeepEval Metrics", border_style="blue"))
 
     # ── Erreurs ─────────────────────────────────────────────────────────────
-    if errors:
+    if result.scoring_errors:
         console.print(Panel(
-            "\n".join(str(e) for e in errors),
+            "\n".join(result.scoring_errors),
             title="Scoring Errors",
             border_style="red",
         ))
-
-    # ── Métadonnées ─────────────────────────────────────────────────────────
-    if run_meta:
-        meta_table = Table.grid(padding=(0, 2))
-        meta_table.add_column(style="dim")
-        meta_table.add_column(style="dim")
-        for k, v in run_meta.items():
-            meta_table.add_row(k, str(v))
-        console.print(Panel(meta_table, title="Run Metadata", border_style="dim"))
 
     console.print()
 
@@ -170,7 +105,7 @@ def _fmt_score(metrics_by_name: dict, name: str, totals: dict) -> str:
     if score is None:
         return "—"
     totals[name].append(score)
-    icon = "✅" if m.get("success") else "❌"
+    icon = "✅" if m.get("verdict") == "passed" else "❌"
     return f"{score:.2f}{icon}"
 
 
@@ -189,15 +124,17 @@ def render_campaign(results: list[dict]) -> None:
     table.add_column("CtxRecall", justify="right", width=10)
 
     for r in results:
+        raw_metrics = r.get("metrics", {})
+        metrics_by_name = raw_metrics if isinstance(raw_metrics, dict) else {m["name"]: m for m in raw_metrics}
         table.add_row(
             r["id"],
             r["outcome"],
             "✅" if r.get("rag_ok") else "❌",
-            _fmt_score(r["metrics"], "AnswerRelevancyMetric", totals),
-            _fmt_score(r["metrics"], "FaithfulnessMetric", totals),
-            _fmt_score(r["metrics"], "ContextualRelevancyMetric", totals),
-            _fmt_score(r["metrics"], "ContextualPrecisionMetric", totals),
-            _fmt_score(r["metrics"], "ContextualRecallMetric", totals),
+            _fmt_score(metrics_by_name, "AnswerRelevancyMetric", totals),
+            _fmt_score(metrics_by_name, "FaithfulnessMetric", totals),
+            _fmt_score(metrics_by_name, "ContextualRelevancyMetric", totals),
+            _fmt_score(metrics_by_name, "ContextualPrecisionMetric", totals),
+            _fmt_score(metrics_by_name, "ContextualRecallMetric", totals),
         )
 
     console.print()
@@ -229,4 +166,43 @@ def render_campaign(results: list[dict]) -> None:
         )
 
     console.print(Panel(avg_table, title="Moyennes par métrique", border_style="blue"))
+    console.print()
+
+
+def render_sql_campaign(results: list[dict]) -> None:
+    """Affiche le tableau récapitulatif d'une campagne SQL."""
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan")
+    table.add_column("ID", style="dim", width=22)
+    table.add_column("Outcome", width=12)
+    table.add_column("Query exec", justify="center", width=12)
+    table.add_column("No error", justify="center", width=10)
+    table.add_column("Pass", justify="center", width=6)
+    table.add_column("Failures", style="dim", no_wrap=False, max_width=50)
+
+    passed = 0
+    for r in results:
+        checks = r.get("observed_checks", {})
+        failures = r.get("failures", [])
+        is_pass = r.get("pass", False)
+        if is_pass:
+            passed += 1
+
+        table.add_row(
+            r["id"],
+            r["outcome"],
+            "✅" if checks.get("sql_query_executed") else "❌",
+            "✅" if checks.get("sql_no_execution_error") else "❌",
+            "✅" if is_pass else "❌",
+            " | ".join(failures) if failures else "—",
+        )
+
+    console.print()
+    console.print(Panel(table, title="Résultats SQL par scénario", border_style="cyan"))
+
+    total = len(results)
+    color = "green" if passed == total else "yellow" if passed > 0 else "red"
+    console.print(Panel(
+        f"[bold {color}]{passed}/{total} scénarios passés[/bold {color}]",
+        border_style=color,
+    ))
     console.print()

@@ -4,12 +4,10 @@ import argparse
 import json
 import os
 
-from fred_deepeval_cli.classify import classify_turn
-from fred_deepeval_cli.deepeval_runner import score_trace
-from fred_deepeval_cli.preset_resolver import resolve_preset
-from fred_deepeval_cli.eval_client import fetch_trace
-from fred_deepeval_cli.structural_checks import build_structural_checks
-from fred_deepeval_cli.display import render_score
+from fred_deepeval_cli.core.models import EvaluationCaseRequest
+from fred_deepeval_cli.core.evaluator import evaluate_case_sync
+from fred_deepeval_cli.core.judge_factory import build_judge
+from fred_deepeval_cli.cli.display import render_score
 from dotenv import load_dotenv
 
 dotenv_path = os.getenv("ENV_FILE", "./config/.env")
@@ -51,48 +49,41 @@ def add_shared_eval_args(parser: argparse.ArgumentParser) -> None:
         help="Optional runtime search policy override (for example: semantic).",
     )
     parser.add_argument(
-        "--preset",
+        "--profile",
         default="auto",
-        choices=["auto", "rag", "sql", "default"],
-        help="Evaluation preset. Defaults to auto-detection from agent_tags.",
+        choices=["auto", "rag", "sql", "workflow", "default"],
+        help="Evaluation profile. Defaults to auto-detection from agent_tags.",
     )
 
 
-def build_base_payload(outcome: str, trace: dict, preset: str = "auto") -> dict:
-    resolved_preset = resolve_preset(trace, explicit_preset=preset)
-
-    return {
-        "outcome": outcome,
-        "trace": trace,
-        "preset": resolved_preset,
-        "structural_checks": build_structural_checks(
-            trace, preset=resolved_preset
-        ),
-        "run_metadata": {},
-    }
-
-
 def run_score(args: argparse.Namespace) -> int:
-    trace = fetch_trace(args)
-    outcome = classify_turn(trace)
+    runtime_context: dict = {"user_id": args.user_id}
+    if args.team_id:
+        runtime_context["team_id"] = args.team_id
+    if args.search_policy:
+        runtime_context["search_policy"] = args.search_policy
 
-    payload = build_base_payload(outcome, trace, preset=args.preset)
-    resolved_preset = payload["preset"]
+    request = EvaluationCaseRequest(
+        agent_id=args.agent_id,
+        input=args.input,
+        session_id=args.session_id,
+        profile=args.profile,
+        runtime_context=runtime_context,
+    )
 
-    payload["deepeval"] = score_trace(trace, preset=resolved_preset)
-    payload["scoring_errors"] = []
-    payload["run_metadata"] = {
-        "scoring_provider": "litellm",
-        "scoring_model": "mistral/mistral-large-latest",
-    }
+    judge = build_judge()
+    result = evaluate_case_sync(
+        base_url=args.base_url,
+        request=request,
+        judge=judge,
+        access_token=args.access_token,
+    )
 
-    render_score(payload)                                      # stderr — affichage humain
-    print(json.dumps(payload, indent=2, ensure_ascii=False))   # stdout — machine/UI
+    render_score(result, request=request)
+    print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
 
-    if outcome == "execution_error":
-        return 1
+    return 1 if result.outcome == "execution_error" else 0
 
-    return 0
 
 def main() -> int:
     parser = build_parser()

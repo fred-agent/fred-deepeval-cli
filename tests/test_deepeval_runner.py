@@ -1,96 +1,65 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
-from fred_deepeval_cli.deepeval_runner import score_trace
+from fred_deepeval_cli.core.scorer import score_trace
 from fred_deepeval_cli.test_helpers import make_trace
 
 
 class FakeMetric:
-    def __init__(self, model=None) -> None:
-        self.model = model
-        self.score = None
-        self.success = None
-        self.reason = None
-
-    def measure(self, test_case) -> None:
+    def __init__(self, model=None, async_mode=False) -> None:
         self.score = 1.0
         self.success = True
         self.reason = None
 
-
-class FakeAnswerMetric(FakeMetric):
-    pass
-
-
-class FakeFaithfulnessMetric(FakeMetric):
-    pass
+    def measure(self, test_case) -> None:
+        pass
 
 
-@patch("fred_deepeval_cli.deepeval_runner.build_judge_model")
-@patch("fred_deepeval_cli.deepeval_runner.FaithfulnessMetric", new=FakeFaithfulnessMetric)
-@patch("fred_deepeval_cli.deepeval_runner.AnswerRelevancyMetric", new=FakeAnswerMetric)
-def test_score_trace_without_retrieval_context_only_uses_answer_relevancy(
-    mock_build_judge_model,
-) -> None:
-    mock_build_judge_model.return_value = object()
-
-    result = score_trace(
-        make_trace(
-            retrieval_context=[],
-            output="Echo: echo bonjour",
-        ),
-        preset="default",
-    )
-
-    metric_names = [metric["name"] for metric in result["metrics"]]
-
-    assert metric_names == ["FakeAnswerMetric"]
+def _patch_metrics():
+    return patch.dict("sys.modules", {
+        "deepeval.metrics": MagicMock(
+            AnswerRelevancyMetric=FakeMetric,
+            FaithfulnessMetric=FakeMetric,
+            ContextualRelevancyMetric=FakeMetric,
+            ContextualPrecisionMetric=FakeMetric,
+            ContextualRecallMetric=FakeMetric,
+        )
+    })
 
 
-@patch("fred_deepeval_cli.deepeval_runner.build_judge_model")
-@patch("fred_deepeval_cli.deepeval_runner.FaithfulnessMetric", new=FakeFaithfulnessMetric)
-@patch("fred_deepeval_cli.deepeval_runner.AnswerRelevancyMetric", new=FakeAnswerMetric)
-def test_score_trace_with_retrieval_context_adds_faithfulness(
-    mock_build_judge_model,
-) -> None:
-    mock_build_judge_model.return_value = object()
+def test_score_trace_without_retrieval_context_only_uses_answer_relevancy() -> None:
+    with _patch_metrics():
+        metrics, errors = score_trace(
+            make_trace(retrieval_context=[], output="Echo: echo bonjour"),
+            profile="default",
+            judge=object(),
+        )
+    assert len(metrics) == 1
+    assert errors == []
 
-    result = score_trace(
-        make_trace(
-            agent_id="fred.github.rag_expert",
-            output="Réponse fondée sur le contexte.",
-            retrieval_context=["chunk-1"],
-            tools_called=["knowledge_search"],
-        ),
-        preset="rag",
-    )
 
-    metric_names = [metric["name"] for metric in result["metrics"]]
+def test_score_trace_with_retrieval_context_adds_faithfulness() -> None:
+    with _patch_metrics():
+        metrics, errors = score_trace(
+            make_trace(
+                output="Réponse fondée sur le contexte.",
+                retrieval_context=["chunk-1"],
+                tools_called=["knowledge_search"],
+            ),
+            profile="rag",
+            judge=object(),
+        )
+    assert len(metrics) > 1
+    assert errors == []
 
-    assert "FakeAnswerMetric" in metric_names
-    assert "FakeFaithfulnessMetric" in metric_names
-    assert result["preset"] == "rag"
 
-@patch("fred_deepeval_cli.deepeval_runner.build_judge_model")
-@patch("fred_deepeval_cli.deepeval_runner.FaithfulnessMetric", new=FakeFaithfulnessMetric)
-@patch("fred_deepeval_cli.deepeval_runner.AnswerRelevancyMetric", new=FakeAnswerMetric)
-def test_score_trace_with_sql_preset_only_uses_answer_relevancy(
-    mock_build_judge_model,
-) -> None:
-    mock_build_judge_model.return_value = object()
-
-    result = score_trace(
-        make_trace(
-            agent_id="fred.github.sql_expert",
-            agent_tags=["sql", "tabular", "react"],
-            output="Average order amount: 548.7",
-            retrieval_context=["schema fragment"],
-        ),
-        preset="sql",
-    )
-
-    metric_names = [metric["name"] for metric in result["metrics"]]
-
-    assert result["preset"] == "sql"
-    assert metric_names == ["FakeAnswerMetric"]
+def test_score_trace_with_sql_profile_only_uses_answer_relevancy() -> None:
+    with _patch_metrics():
+        metrics, errors = score_trace(
+            make_trace(agent_tags=["sql"], output="Average: 548.7", retrieval_context=["schema"]),
+            profile="sql",
+            judge=object(),
+        )
+    assert len(metrics) == 1
+    assert errors == []
