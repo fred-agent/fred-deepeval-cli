@@ -10,12 +10,24 @@ logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 logging.getLogger("root").setLevel(logging.CRITICAL)
 
 
+def _normalize_retrieval_context(raw: list) -> list[str]:
+    result = []
+    for item in raw:
+        if isinstance(item, str):
+            result.append(item)
+        elif isinstance(item, dict):
+            result.append(item.get("content") or item.get("text") or str(item))
+    return result
+
+
 def _trace_to_test_case(trace: dict, expected_output: str | None = None) -> LLMTestCase:
+    raw_context = trace.get("retrieval_context") or []
+    retrieval_context = _normalize_retrieval_context(raw_context) if raw_context else []
     return LLMTestCase(
         input=trace.get("input", ""),
         actual_output=trace.get("output") or "",
         expected_output=expected_output,
-        retrieval_context=trace.get("retrieval_context", []) or [],
+        retrieval_context=retrieval_context,
     )
 
 
